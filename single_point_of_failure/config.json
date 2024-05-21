@@ -1,0 +1,18 @@
+{
+    "source-mssql":{
+        "type": "mssql",
+        "host": "127.0.0.1",
+        "port": 31433,
+        "username": "SA",
+        "password": "1qaz@WSX",
+        "database": "TestDB"
+    }, 
+    "target-mysql":{
+        "type": "mysql",
+        "host": "127.0.0.1",
+        "port": 33306,
+        "username": "mysql",
+        "password": "1qaz@WSX",
+        "database": "MirrorTestDB"
+    }
+}  
