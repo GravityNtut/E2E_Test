@@ -40,11 +40,10 @@ services:
       - MYSQL_USER=mysql
       - MYSQL_PASSWORD=1qaz@WSX
       - MYSQL_ROOT_PASSWORD=1qaz@WSXROOT
-      - MYSQL_DATABASE=MirrorTestDB
+      - MYSQL_DATABASE=TargetTestDB
     ports:
       - 33306:3306
     volumes:
-      - ./assets/mysql/create_target.sql:/docker-entrypoint-initdb.d/setup.sql
       - ./assets:/assets
     entrypoint: /bin/bash
     command:

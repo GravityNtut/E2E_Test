@@ -1,0 +1,14 @@
+MSSQL:
+    查詢所有DB
+        /opt/mssql-tools/bin/sqlcmd -U sa -P ${SA_PASSWORD} -e  -Q "SELECT name, database_id, create_date FROM sys.databases;"
+    列出所有 TestDB 的 Table
+        /opt/mssql-tools/bin/sqlcmd -U sa -P 1qaz@WSX -e -Q "SELECT * FROM INFORMATION_SCHEMA.TABLES ;" -d "TestDB"
+    查詢Account
+        /opt/mssql-tools/bin/sqlcmd -U sa -P 1qaz@WSX -e -d TestDB -Q "SELECT * FROM dbo.Accounts ORDER BY Id ASC"
+mysql:
+    進入mysql 指令執行
+    印出所有DB
+        SHOW DATABASES
+    查詢Account
+        USE TargetTestDB; 
+        SELECT * FROM Accounts order by id;

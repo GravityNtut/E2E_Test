@@ -1,17 +1,3 @@
-IF DB_ID('TestDB') IS NULL
-BEGIN
-    CREATE DATABASE TestDB;
-    SELECT 'Database created.';
-END
-ELSE
-BEGIN
-    SELECT 'Database `TestDB` already exists.';
-END
-GO
-
-USE TestDB;
-GO
-
 IF OBJECT_ID('dbo.Accounts', 'U') IS NULL
 BEGIN
     CREATE TABLE Accounts (id INT, name NVARCHAR(50), phone NVARCHAR(16));
@@ -27,4 +13,3 @@ ELSE
 BEGIN
     SELECT 'Table `Accounts` already exists.';
 END
-GO

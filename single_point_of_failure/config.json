@@ -13,6 +13,6 @@
         "port": 33306,
         "username": "mysql",
         "password": "1qaz@WSX",
-        "database": "MirrorTestDB"
+        "database": "TargetTestDB"
     }
 }  
