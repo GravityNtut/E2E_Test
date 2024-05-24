@@ -2,9 +2,11 @@ package e2e
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -459,6 +461,59 @@ func InitAtomicService(serviceName string) error {
 	}
 	token := parts[1]
 	fmt.Println("Token: ", token)
+
+	inputFileName := "test.json"
+	file, err := os.Open(inputFileName)
+	if err != nil {
+		return fmt.Errorf("Failed to open JSON file: %v", err)
+	}
+	defer file.Close()
+
+	byteValue, err := ioutil.ReadAll(file)
+	if err != nil {
+		return fmt.Errorf("Failed to read JSON file: %v", err)
+	}
+
+	var data map[string]map[string]string
+	if err := json.Unmarshal(byteValue, &data); err != nil {
+		return fmt.Errorf("Failed to parse JSON file: %v", err)
+	}
+
+	for _, v := range data {
+		if _, ok := v["accessToken"]; ok {
+			v["accessToken"] = token
+		}
+	}
+
+	outputFileName := "output.json"
+	modifiedFile, err := os.Create(outputFileName)
+	if err != nil {
+		return fmt.Errorf("Failed to create output JSON file: %v", err)
+	}
+	defer modifiedFile.Close()
+
+	modifiedJSON, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("Failed to marshal modified JSON: %v", err)
+	}
+	fmt.Println("modifiedJSON: ", string(modifiedJSON))
+
+	if _, err := modifiedFile.Write(modifiedJSON); err != nil {
+		return fmt.Errorf("Failed to write to output JSON file: %v", err)
+	}
+	cmd := exec.Command("sh", "./flowEnc.sh", "output.json",
+		"./assets/atomic", ">", "./assets/atomic/flows_cred.json")
+	credFile, err := os.Create("./assets/atomic/flows_cred.json")
+	if err != nil {
+		return fmt.Errorf("Failed to create flows_cred.json: %v", err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stdout = credFile
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("Failed to execute flowEnc.sh: %s", stderr.String())
+	}
 	return nil
 }
 
