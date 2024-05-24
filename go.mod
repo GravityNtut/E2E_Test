@@ -5,7 +5,7 @@ go 1.21.3
 require (
 	github.com/cucumber/godog v0.14.1
 	github.com/docker/docker v26.1.3+incompatible
-	github.com/sirupsen/logrus v1.9.3
+	github.com/nats-io/nats.go v1.35.0
 	gorm.io/driver/mysql v1.5.6
 	gorm.io/driver/sqlserver v1.5.3
 	gorm.io/gorm v1.25.10
@@ -37,7 +37,6 @@ require (
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/term v0.5.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
-	github.com/nats-io/nats.go v1.35.0 // indirect
 	github.com/nats-io/nkeys v0.4.7 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect

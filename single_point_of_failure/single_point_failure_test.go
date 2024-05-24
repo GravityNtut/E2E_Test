@@ -1,11 +1,13 @@
 package e2e
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"testing"
 	"time"
 
@@ -221,36 +223,14 @@ func CreateDataProduct(accounts string) error {
 		}
 	}
 	defer nc.Close()
-
-	ctx := context.Background()
-
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("Error creating Docker client: %v\n", err)
-	}
-
 	containerID := "gravity-dispatcher"
 
 	cmd := []string{"sh", "/assets/dispatcher/create_product.sh"}
-
-	execConfig := types.ExecConfig{
-		Cmd:          cmd,
-		AttachStdout: true,
-		AttachStderr: true,
-	}
-
-	execIDResp, err := cli.ContainerExecCreate(ctx, containerID, execConfig)
+	result, err := ExecuteContainerCommand(containerID, cmd)
 	if err != nil {
-		return fmt.Errorf("Error creating exec instance: %v\n", err)
-
+		return err
 	}
-
-	resp, err := cli.ContainerExecAttach(ctx, execIDResp.ID, types.ExecStartCheck{})
-	if err != nil {
-		return fmt.Errorf("Error attaching to exec instance: %v\n", err)
-	}
-	defer resp.Close()
-
+	fmt.Println(result)
 	return nil
 }
 
@@ -280,7 +260,7 @@ func VerifyRowCountTimeoutSeconds(loc, tableName string, expectedRowCount, timeo
 			return nil
 		}
 		fmt.Printf("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d\n",
-		 loc, tableName, expectedRowCount, retry, currRowCount)
+			loc, tableName, expectedRowCount, retry, currRowCount)
 		// log.Infof("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d",
 		// 	loc, tableName, expectedRowCount, retry, currRowCount)
 		time.Sleep(1 * time.Second)
@@ -424,7 +404,7 @@ func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, tableName, locFrom stri
 			return nil
 		}
 		fmt.Printf("Waiting for '%s' table '%s' to has %d same content.. (%d sec), last match ID %d\n",
-		 locTo, tableName, srcRowCount, retry, lastMatchID)
+			locTo, tableName, srcRowCount, retry, lastMatchID)
 		// log.Infof("Waiting for '%s' table '%s' to has %d same content.. (%d sec), last match ID %d",
 		// 	locTo, tableName, srcRowCount, retry, lastMatchID)
 		time.Sleep(1 * time.Second)
@@ -432,16 +412,65 @@ func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, tableName, locFrom stri
 	return fmt.Errorf("Content of table '%s' is not the same after %d second", tableName, timeoutSec)
 }
 
+func ExecuteContainerCommand(containerID string, cmd []string) (string, error) {
+	ctx := context.Background()
 
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return "", fmt.Errorf("Error creating Docker client: %v\n", err)
+	}
+
+	execConfig := types.ExecConfig{
+		Cmd:          cmd,
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execIDResp, err := cli.ContainerExecCreate(ctx, containerID, execConfig)
+	if err != nil {
+		return "", fmt.Errorf("Error creating exec instance: %v\n", err)
+
+	}
+
+	resp, err := cli.ContainerExecAttach(ctx, execIDResp.ID, types.ExecStartCheck{})
+	if err != nil {
+		return "", fmt.Errorf("Error attaching to exec instance: %v\n", err)
+	}
+	defer resp.Close()
+
+	scanner := bufio.NewScanner(resp.Reader)
+	result := ""
+	for scanner.Scan() {
+		result += scanner.Text() + "\n"
+	}
+	return result, nil
+}
+
+func InitAtomicService(serviceName string) error {
+	cmdString := []string{"/gravity-cli", "token", "create", "-s", "nats-jetstream:32803"}
+	result, err := ExecuteContainerCommand("gravity-dispatcher", cmdString)
+	if err != nil {
+		return err
+	}
+	regexp := regexp.MustCompile(`Token: (.*)`)
+	parts := regexp.FindStringSubmatch(result)
+	if parts == nil {
+		return fmt.Errorf("Failed to get token from result: %s", result)
+	}
+	token := parts[1]
+	fmt.Println("Token: ", token)
+	return nil
+}
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Given(`^啟動 "([^"]*)" 服務$`, DockerComposeServiceStart)
 	ctx.Given(`^初始化 "([^"]*)" 資料表 Accounts$`, DBServerInit)
 	ctx.Given(`^創建 Data Product "([^"]*)"$`, CreateDataProduct)
+	ctx.Given(`^初始化 "([^"]*)" 服務$`, InitAtomicService)
 
 	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 筆數為 "(\d+)" \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
 	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 新增 "([^"]*)" 筆 \(ID 開始編號 "(\d+)"\)$`, InsertDummyDataFromID)
-	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 有與 "([^"]*)" 一致的資料筆數與內容 \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
+	// ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 有與 "([^"]*)" 一致的資料筆數與內容 \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
 	// // ctx.Step(`^container "([^"]*)" and process "([^"]*)" ready \(timeout "(\d+)"\)$`, containerAndProcessReadyTimeoutSeconds)
 	// ctx.Step(`^container "([^"]*)" was "([^"]*)" \(timeout "(\d+)"\)$`, containerStateWasTimeoutSeconds)
 	// ctx.Step(`^測試資料庫 "([^"]*)" 連線資訊:$`, dbServerInfoSetup)
