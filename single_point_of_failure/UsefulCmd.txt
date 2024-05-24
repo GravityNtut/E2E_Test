@@ -7,8 +7,12 @@ MSSQL:
         /opt/mssql-tools/bin/sqlcmd -U sa -P 1qaz@WSX -e -d TestDB -Q "SELECT * FROM dbo.Accounts ORDER BY Id ASC"
 mysql:
     進入mysql 指令執行
+        mysql -u ${MYSQL_USER} --password=${MYSQL_PASSWORD}
     印出所有DB
         SHOW DATABASES
     查詢Account
         USE TargetTestDB; 
         SELECT * FROM Accounts order by id;
+
+dispatcher:
+    ./gravity-cli product list -s nats-jetstream:32803
