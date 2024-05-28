@@ -23,4 +23,6 @@ go.work
 **/flows_cred.json
 **/.flows*.json
 .npm/
-tmp/
+
+**/tmp/*
+!**/tmp/.gitkeep
