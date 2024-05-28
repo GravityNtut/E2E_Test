@@ -152,7 +152,7 @@ func CreateTestDB(dialector gorm.Dialector, createTestDBFilePath string) error {
 	}
 	str, err := os.ReadFile(createTestDBFilePath)
 	if err != nil {
-		return fmt.Errorf("Failed to read create_testDB.sql: %v", err)
+		return fmt.Errorf("Failed to read create_test_db.sql: %v", err)
 	}
 	db.Exec(string(str))
 	return nil
@@ -194,7 +194,7 @@ func DBServerInit(dbStr string) error {
 			info.Username, info.Password, info.Host, info.Port)
 
 		dialector = sqlserver.Open(dsn)
-		createTestDBFilePath = "./assets/mssql/create_testDB.sql"
+		createTestDBFilePath = "./assets/mssql/create_test_db.sql"
 		serverInfo = &config.SourceDB
 		createTableFilePath = "./assets/mssql/create_table.sql"
 	case TargetMySQL:
@@ -203,7 +203,7 @@ func DBServerInit(dbStr string) error {
 			info.Username, info.Password, info.Host, info.Port)
 
 		dialector = mysql.Open(dsn)
-		createTestDBFilePath = "./assets/mysql/create_testDB.sql"
+		createTestDBFilePath = "./assets/mysql/create_test_db.sql"
 
 		serverInfo = &config.TargetDB
 		createTableFilePath = "./assets/mysql/create_table.sql"

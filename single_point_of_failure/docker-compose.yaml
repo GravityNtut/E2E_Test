@@ -23,8 +23,6 @@ services:
       - TESTDB_INIT_SQL=/assets/mssql/create_source.sql
     ports:
       - 31433:1433
-    volumes:
-      - ./assets:/assets
     command:
       - /bin/bash
       - -c
@@ -43,8 +41,6 @@ services:
       - MYSQL_DATABASE=TargetTestDB
     ports:
       - 33306:3306
-    volumes:
-      - ./assets:/assets
     entrypoint: /bin/bash
     command:
       - -c
@@ -65,9 +61,6 @@ services:
       - -c
       - |
         sh /startup.sh
-    volumes:
-      - ./assets:/assets
-      # - /statestore
     networks:
       - nats
     environment:
@@ -120,7 +113,7 @@ services:
       - |
         /gravity-dispatcher
     volumes:
-      - "./assets:/assets"
+      - "./assets/dispatcher:/assets/dispatcher"
     networks:
       - nats
 
