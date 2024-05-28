@@ -9,8 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/cucumber/godog"
 	"github.com/docker/docker/api/types"
@@ -60,6 +63,38 @@ type Account struct {
 
 var Cmd *exec.Cmd
 
+const (
+	DockerComposeFile = "./docker-compose.yaml"
+	SourceMSSQL       = "source-mssql"
+	TargetMySQL       = "target-mysql"
+	Dispatcher        = "gravity-dispatcher"
+	Atomic            = "atomic"
+	Adapter           = "gravity-adapter-mssql"
+	NatsJetstream     = "nats-jetstream"
+)
+
+func CreateServices() error {
+	cmd := exec.Command("docker", "compose", "-f", DockerComposeFile, "create")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
+	return nil
+}
+
+func CloseAllServices() error {
+	cmd := exec.Command("docker", "compose", "-f", DockerComposeFile, "down")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
+	return nil
+}
+
 func GetContainerStateByName(ctName string) (*types.ContainerState, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -77,7 +112,7 @@ func GetContainerStateByName(ctName string) (*types.ContainerState, error) {
 	return containerInfo.State, nil
 }
 
-func connectToDB(s *serverInfo) (*gorm.DB, error) {
+func ConnectToDB(s *serverInfo) (*gorm.DB, error) {
 	if s.Type == "mysql" {
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 			s.Username, s.Password, s.Host, s.Port, s.Database)
@@ -94,9 +129,8 @@ func connectToDB(s *serverInfo) (*gorm.DB, error) {
 			return nil, fmt.Errorf("Failed to connect to database: %v", err)
 		}
 		return db, nil
-	} else {
-		return nil, fmt.Errorf("Invalid database type '%s'", s.Type)
 	}
+	return nil, fmt.Errorf("Invalid database type '%s'", s.Type)
 }
 
 func LoadConfig() error {
@@ -111,35 +145,22 @@ func LoadConfig() error {
 	return nil
 }
 
-func CreateTestDB(dialector gorm.Dialector, createTestDBFilePath string) bool {
-	db, err := gorm.Open(dialector, &gorm.Config{})
+func CreateTestDB(dialector gorm.Dialector, createTestDBFilePath string) error {
+	db, err := DatabaseLifeCheck(dialector, 60)
 	if err != nil {
-		fmt.Printf("正在嘗試連接至 %s Database", dialector.Name())
-		return false
-	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		fmt.Printf("Failed to get sql.DB from gorm.DB: %v", err)
-		return false
-	}
-
-	if err := sqlDB.Ping(); err != nil {
-		fmt.Printf("正在等待 %s Database 可用", dialector.Name())
-		return false
+		return err
 	}
 	str, err := os.ReadFile(createTestDBFilePath)
 	if err != nil {
-		fmt.Println("Failed to read create_testDB.sql: ", err)
-		return false
+		return fmt.Errorf("Failed to read create_testDB.sql: %v", err)
 	}
 	db.Exec(string(str))
-	return true
+	return nil
 }
 
 func InitAccountTable(s *serverInfo, createTableFilePath string) error {
 	var err error
-	sourceDB, err := connectToDB(s)
+	sourceDB, err := ConnectToDB(s)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to '%s' database: %v", s.Type, err)
 	}
@@ -159,9 +180,6 @@ func InitAccountTable(s *serverInfo, createTableFilePath string) error {
 }
 
 func DBServerInit(dbStr string) error {
-	if err := LoadConfig(); err != nil {
-		return fmt.Errorf("Failed to load config: %v", err)
-	}
 	var (
 		dialector            gorm.Dialector
 		createTestDBFilePath string
@@ -170,7 +188,7 @@ func DBServerInit(dbStr string) error {
 	)
 
 	switch dbStr {
-	case "source-mssql":
+	case SourceMSSQL:
 		info := &config.SourceDB
 		dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%d",
 			info.Username, info.Password, info.Host, info.Port)
@@ -179,7 +197,7 @@ func DBServerInit(dbStr string) error {
 		createTestDBFilePath = "./assets/mssql/create_testDB.sql"
 		serverInfo = &config.SourceDB
 		createTableFilePath = "./assets/mssql/create_table.sql"
-	case "target-mysql":
+	case TargetMySQL:
 		info := &config.TargetDB
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=True&loc=Local",
 			info.Username, info.Password, info.Host, info.Port)
@@ -193,8 +211,8 @@ func DBServerInit(dbStr string) error {
 		return fmt.Errorf("Invalid database type '%s'", dbStr)
 	}
 
-	for !CreateTestDB(dialector, createTestDBFilePath) {
-		time.Sleep(5 * time.Second)
+	if err := CreateTestDB(dialector, createTestDBFilePath); err != nil {
+		return err
 	}
 	if err := InitAccountTable(serverInfo, createTableFilePath); err != nil {
 		return err
@@ -202,7 +220,7 @@ func DBServerInit(dbStr string) error {
 	return nil
 }
 
-func DockerComposeServiceStart(serviceName string) error {
+func DockerComposeServiceStart(serviceName string, timeout int) error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return fmt.Errorf("Failed to create docker client: %v", err)
@@ -210,37 +228,87 @@ func DockerComposeServiceStart(serviceName string) error {
 	if err := cli.ContainerStart(context.Background(), serviceName, container.StartOptions{}); err != nil {
 		return fmt.Errorf("Failed to start container '%s': %v", serviceName, err)
 	}
-	return nil
+	return ContainerAndProcessReadyTimeoutSeconds(serviceName, timeout)
 }
 
-func CreateDataProduct(accounts string) error {
-	var err error = fmt.Errorf("")
-	var nc *nats.Conn
-	for err != nil {
-		nc, err = nats.Connect("nats://127.0.0.1:32803")
+func DatabaseLifeCheck(dialector gorm.Dialector, timeout int) (*gorm.DB, error) {
+	for i := 0; i < timeout; i += 5 {
+		db, err := gorm.Open(dialector, &gorm.Config{})
 		if err != nil {
-			fmt.Println("Failed to connect to NATS server, retrying...")
-			time.Sleep(1 * time.Second)
+			log.Infof("正在嘗試連接至 %s Database (%d sec)", dialector.Name(), i)
+			time.Sleep(5 * time.Second)
+			continue
 		}
+
+		sqlDB, err := db.DB()
+		if err != nil {
+			log.Infof("Failed to get sql.DB from gorm.DB: %v", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		if err := sqlDB.Ping(); err != nil {
+			log.Infof("正在等待 %s Database 可用 (%d sec)", dialector.Name(), i)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		return db, nil
+	}
+	return nil, fmt.Errorf("連接至 %s Database 逾時", dialector.Name())
+}
+
+func NatsLifeCheck(timeout int) (*nats.Conn, error) {
+	for i := 0; i < timeout; i++ {
+		nc, err := nats.Connect("nats://127.0.0.1:32803")
+		if err != nil {
+			log.Infoln("無法連接至 NATS 伺服器，等待 1 秒後重試")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		return nc, nil
+	}
+	return nil, fmt.Errorf("連接至 NATS 伺服器逾時")
+}
+
+func ContainerLifeCheck(ctName, psName string, timeout int) error {
+	for i := 0; i < timeout; i++ {
+		err := CheckProcessRunningInContainer(ctName, psName)
+		if err == nil {
+			log.Infof("container '%s' is ready.. %d", ctName, i)
+			return nil
+		}
+		if i%10 == 0 {
+			log.Infof("Waiting for container '%s' to be ready.. (%d sec)", ctName, i)
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return fmt.Errorf("服務 '%s' 在 %d秒 後逾時未啟動", ctName, timeout)
+
+}
+
+func CreateDataProduct() error {
+	nc, err := nats.Connect("nats://127.0.0.1:32803")
+	if err != nil {
+		return err
 	}
 	defer nc.Close()
-	containerID := "gravity-dispatcher"
+	containerID := Dispatcher
 
 	cmd := []string{"sh", "/assets/dispatcher/create_product.sh"}
 	result, err := ExecuteContainerCommand(containerID, cmd)
 	if err != nil {
 		return err
 	}
-	fmt.Println(result)
+	log.Infoln(result)
 	return nil
 }
 
 func GetDBInstance(loc string) (*gorm.DB, error) {
 	switch loc {
-	case "source-mssql":
-		return connectToDB(&config.SourceDB)
-	case "target-mysql":
-		return connectToDB(&config.TargetDB)
+	case SourceMSSQL:
+		return ConnectToDB(&config.SourceDB)
+	case TargetMySQL:
+		return ConnectToDB(&config.TargetDB)
 	default:
 		return nil, fmt.Errorf("Invalid database location '%s'", loc)
 	}
@@ -260,10 +328,8 @@ func VerifyRowCountTimeoutSeconds(loc, tableName string, expectedRowCount, timeo
 		if currRowCount == int64(expectedRowCount) {
 			return nil
 		}
-		fmt.Printf("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d\n",
+		log.Infof("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d",
 			loc, tableName, expectedRowCount, retry, currRowCount)
-		// log.Infof("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d",
-		// 	loc, tableName, expectedRowCount, retry, currRowCount)
 		time.Sleep(1 * time.Second)
 	}
 
@@ -275,12 +341,8 @@ func InsertDummyDataFromID(loc, tableName string, total int, beginID int) error 
 	if err != nil {
 		return err
 	}
-
-	fmt.Printf("Inserting total %d records to '%s' - '%s', begin ID '%d'\n",
+	log.Infof("Inserting total %d records to '%s' - '%s', begin ID '%d'",
 		total, loc, tableName, beginID)
-
-	// log.Infof("Inserting total %d records to '%s' - '%s', begin ID '%d'",
-	// 	total, loc, tableName, beginID)
 	// Insert dummy data from beginID
 	insFailed := 0
 	start := time.Now()
@@ -295,23 +357,20 @@ func InsertDummyDataFromID(loc, tableName string, total int, beginID int) error 
 			tableName, account.ID, account.Name, account.Phone)
 		result := db.Exec(query)
 		if result.Error != nil {
-			fmt.Printf("Failed to insert '%d th' record: %v", i, result.Error)
-			// log.Printf("Failed to insert '%d th' record: %v", i, result.Error)
+			log.Printf("Failed to insert '%d th' record: %v", i, result.Error)
 			insFailed++
 		}
 	}
 
 	elapsed := time.Since(start)
-	fmt.Printf("Inserted total %d records to '%s', ID '%d ~ %d' (elapsed: %s)",
+	log.Infof("Inserted total %d records to '%s', ID '%d ~ %d' (elapsed: %s)",
 		total, loc, beginID, beginID+total-1, elapsed)
-	// log.Infof("Inserted total %d records to '%s', ID '%d ~ %d' (elapsed: %s)",
-	// 	total, loc, beginID, beginID+total-1, elapsed)
 	return nil
 }
 
 func CompareRecords(sourceDB, targetDB *gorm.DB) (int, error) {
 	var (
-		limit    = 1000
+		limit    = 5000
 		offset   = 0
 		moreData = true
 
@@ -384,10 +443,8 @@ func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, tableName, locFrom stri
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d\n",
+		log.Infof("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d",
 			locTo, tableName, srcRowCount, retry, targetRowCount)
-		// log.Infof("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d",
-		// 	locTo, tableName, srcRowCount, retry, targetRowCount)
 		if targetRowCount == srcRowCount {
 			break
 		}
@@ -404,13 +461,11 @@ func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, tableName, locFrom stri
 		if err == nil {
 			return nil
 		}
-		fmt.Printf("Waiting for '%s' table '%s' to has %d same content.. (%d sec), last match ID %d\n",
+		log.Infof("Waiting for '%s' table '%s' to has %d same content.. (%d sec), last match ID %d",
 			locTo, tableName, srcRowCount, retry, lastMatchID)
-		// log.Infof("Waiting for '%s' table '%s' to has %d same content.. (%d sec), last match ID %d",
-		// 	locTo, tableName, srcRowCount, retry, lastMatchID)
 		time.Sleep(1 * time.Second)
 	}
-	return fmt.Errorf("Content of table '%s' is not the same after %d second", tableName, timeoutSec)
+	return fmt.Errorf("content of table '%s' is not the same after %d second", tableName, timeoutSec)
 }
 
 func ExecuteContainerCommand(containerID string, cmd []string) (string, error) {
@@ -418,7 +473,7 @@ func ExecuteContainerCommand(containerID string, cmd []string) (string, error) {
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return "", fmt.Errorf("Error creating Docker client: %v\n", err)
+		return "", fmt.Errorf("Error creating Docker client: %v", err)
 	}
 
 	execConfig := types.ExecConfig{
@@ -429,13 +484,13 @@ func ExecuteContainerCommand(containerID string, cmd []string) (string, error) {
 
 	execIDResp, err := cli.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
-		return "", fmt.Errorf("Error creating exec instance: %v\n", err)
+		return "", fmt.Errorf("error creating exec instance: %v", err)
 
 	}
 
 	resp, err := cli.ContainerExecAttach(ctx, execIDResp.ID, types.ExecStartCheck{})
 	if err != nil {
-		return "", fmt.Errorf("Error attaching to exec instance: %v\n", err)
+		return "", fmt.Errorf("Error attaching to exec instance: %v", err)
 	}
 	defer resp.Close()
 
@@ -449,7 +504,7 @@ func ExecuteContainerCommand(containerID string, cmd []string) (string, error) {
 
 func GetToken() (string, error) {
 	cmdString := []string{"/gravity-cli", "token", "create", "-s", "nats-jetstream:32803"}
-	result, err := ExecuteContainerCommand("gravity-dispatcher", cmdString)
+	result, err := ExecuteContainerCommand(Dispatcher, cmdString)
 	if err != nil {
 		return "", err
 	}
@@ -461,7 +516,7 @@ func GetToken() (string, error) {
 	return parts[1], nil
 }
 
-func InitAtomicService(serviceName string) error {
+func InitAtomicService() error {
 	token, err := GetToken()
 	if err != nil {
 		return err
@@ -489,7 +544,12 @@ func InitAtomicService(serviceName string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to create output JSON file: %v", err)
 	}
-	defer modifiedFile.Close()
+
+	defer func() {
+		if err := modifiedFile.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	modifiedJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -517,22 +577,213 @@ func InitAtomicService(serviceName string) error {
 	return nil
 }
 
-func InitializeScenario(ctx *godog.ScenarioContext) {
-	ctx.Given(`^啟動 "([^"]*)" 服務$`, DockerComposeServiceStart)
-	ctx.Given(`^初始化 "([^"]*)" 資料表 Accounts$`, DBServerInit)
-	ctx.Given(`^創建 Data Product "([^"]*)"$`, CreateDataProduct)
-	ctx.Given(`^初始化 "([^"]*)" 服務$`, InitAtomicService)
+func DockerComposeServiceIn(action, serviceName, executionMode string) error {
+	if action != "start" && action != "stop" && action != "restart" {
+		return fmt.Errorf("Invalid docker-compose action '%s'", action)
+	}
 
-	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 筆數為 "(\d+)" \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
-	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 新增 "([^"]*)" 筆 \(ID 開始編號 "(\d+)"\)$`, InsertDummyDataFromID)
-	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 有與 "([^"]*)" 一致的資料筆數與內容 \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
-	// // ctx.Step(`^container "([^"]*)" and process "([^"]*)" ready \(timeout "(\d+)"\)$`, containerAndProcessReadyTimeoutSeconds)
-	// ctx.Step(`^container "([^"]*)" was "([^"]*)" \(timeout "(\d+)"\)$`, containerStateWasTimeoutSeconds)
-	// ctx.Step(`^測試資料庫 "([^"]*)" 連線資訊:$`, dbServerInfoSetup)
-	// // ctx.Step(`^docker-compose "([^"]*)" service "([^"]*)" \(in "([^"]*)"\)$`, dockerComposeServiceIn)
-	// ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 筆數大於 "(\d+)" \(timeout "([^"]*)"\)$`, rowCountLargeThenTimeoutSeconds)
-	// ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 筆數小於 "(\d+)" \(timeout "([^"]*)"\)$`, rowCountLessThenTimeoutSeconds)
-	// ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 清空$`, cleanUpTable)
-	// ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 更新 "([^"]*)" 筆 - 每筆 Name 的內容加上後綴 updated \(ID 開始編號 "(\d+)"\)$`, updateRowDummyDataFromID)
-	// ctx.Step(`^"([^"]*)" ready, "([^"]*)" flag file existed \(timeout "([^"]*)"\)$`, serviceReady)
+	if executionMode != "foreground" && executionMode != "background" {
+		return fmt.Errorf("Invalid docker compose execution mode '%s'", executionMode)
+	}
+
+	cmd := exec.Command("docker", "compose", "-f", DockerComposeFile, action, serviceName)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	switch executionMode {
+	case "foreground":
+		// 在前景執行命令, 等待命令執行結束
+		if err := cmd.Run(); err != nil {
+			log.Fatal(err)
+		}
+	case "background":
+		// 在背景執行命令，不等待命令執行結束
+		if err := cmd.Start(); err != nil {
+			log.Fatal(err)
+		}
+	}
+	return nil
+}
+
+func ContainerStateWasTimeoutSeconds(ctName string, expectedState string, timeoutSec int) error {
+	var (
+		err   error
+		i     int
+		state *types.ContainerState
+	)
+
+	for i = 0; i < timeoutSec; i++ {
+		state, err = GetContainerStateByName(ctName)
+		if err == nil {
+			log.Debugf("Container '%s' state: %s", ctName, state.Status)
+			if expectedState == "exited" && state.Running == false {
+				return nil
+			}
+			if expectedState == "running" && state.Running == true {
+				return nil
+			}
+		} else {
+			log.Errorf("Failed to get container '%s' state: %s", ctName, err.Error())
+		}
+		if i%10 == 0 {
+			log.Infof("Waiting for container '%s' state to be '%s'.. (%d sec)", ctName, expectedState, i)
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	if state != nil {
+		log.Errorf("Container '%s' state expected '%s', but got '%s' after %d sec", ctName, expectedState, state.Status, i)
+	} else {
+		log.Errorf("Container '%s' state expected '%s', but not found after %d sec", ctName, expectedState, i)
+	}
+	return err
+}
+
+func CheckProcessRunningInContainer(containerName, processName string) error {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return err
+	}
+
+	containers, err := cli.ContainerList(context.Background(), container.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, container := range containers {
+		if container.Names[0] == "/"+containerName {
+			processes, err := cli.ContainerTop(context.Background(), container.ID, []string{})
+			if err != nil {
+				return err
+			}
+			for _, processInfo := range processes.Processes {
+				cmdLine := processInfo[7] // Top 看到的一行資訊，第 8 個欄位是執行的 command line
+				// log.Infof("command line: %s", cmdLine)
+				if cmdLine == "/"+processName || cmdLine == processName {
+					return nil
+				}
+
+				if len(cmdLine) > 0 {
+					cmds := strings.Split(cmdLine, " ")
+					if len(cmds) > 0 {
+						// log.Infof("cmds name: %v", cmds)
+						for _, cmd := range cmds {
+							// log.Debugf("cmd: %s", cmd)
+							if cmd == processName || cmd == "/"+processName {
+								return nil
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return fmt.Errorf("Process %s is not running in container %s", processName, containerName)
+}
+
+func ContainerAndProcessReadyTimeoutSeconds(ctName string, timeoutSec int) error {
+	//wait gravity-adapter-mssql process ready, timeout 60s
+	switch ctName {
+	case Atomic:
+		return ContainerLifeCheck(ctName, "node-red", timeoutSec)
+	case Adapter:
+		fallthrough
+	case Dispatcher:
+		return ContainerLifeCheck(ctName, ctName, timeoutSec)
+	case NatsJetstream:
+		nc, err := NatsLifeCheck(timeoutSec)
+		if err != nil {
+			return err
+		}
+		defer nc.Close()
+		return nil
+	case TargetMySQL:
+		s := config.TargetDB
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=True&loc=Local",
+			s.Username, s.Password, s.Host, s.Port)
+		db := mysql.Open(dsn)
+		_, err := DatabaseLifeCheck(db, timeoutSec)
+		if err != nil {
+			return err
+		}
+		return nil
+	case SourceMSSQL:
+		s := config.SourceDB
+		dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%d",
+			s.Username, s.Password, s.Host, s.Port)
+		db := sqlserver.Open(dsn)
+		_, err := DatabaseLifeCheck(db, timeoutSec)
+		if err != nil {
+			return err
+		}
+		return nil
+	default:
+		return fmt.Errorf("Invalid container name '%s'", ctName)
+	}
+}
+
+func UpdateRowDummyDataFromID(loc, tableName string, total, beginID int) error {
+	db, err := GetDBInstance(loc)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Updating %d records to '%s' - '%s'", total, loc, tableName)
+	// Update dummy data
+	opFailed := 0
+	start := time.Now()
+
+	for i := beginID; i < total+beginID; i++ {
+		// 更新 Name 欄位
+		err = db.Table("Accounts").Where("ID = ?", i).Update("Name", gorm.Expr("CONCAT(Name, ?)", " updated")).Error
+		if err != nil {
+			log.Errorf("Failed to insert '%d th' record: %v", i, err)
+			opFailed++
+		}
+	}
+
+	elapsed := time.Since(start)
+	log.Infof("Updated total %d records to '%s' table '%s', ID '%d ~ %d', failed count %d (elapsed: %s)",
+		total, loc, tableName, beginID, beginID+total-1, opFailed, elapsed)
+	return nil
+}
+
+func CleanUpTable(loc, tableName string) error {
+	db, err := GetDBInstance(loc)
+	if err != nil {
+		return err
+	}
+	// Clean up
+	result := db.Exec(fmt.Sprintf("DELETE FROM %s", tableName))
+	if result.Error != nil {
+		return fmt.Errorf("Failed to exec clean up '%s' table '%s': %v", loc, tableName, result.Error)
+	}
+
+	var rowCount int64
+	db.Table(tableName).Count(&rowCount)
+	if rowCount != 0 {
+		return fmt.Errorf("Failed to clean up '%s' table '%s'", loc, tableName)
+	}
+	return nil
+}
+
+func InitializeScenario(ctx *godog.ScenarioContext) {
+	ctx.Given(`^創建所有服務$`, CreateServices)
+	ctx.Given(`^刪除所有服務$`, CloseAllServices)
+	ctx.Given(`^讀取初始設定檔$`, LoadConfig)
+	ctx.Given(`^啟動 "([^"]*)" 服務 \(timeout "(\d+)"\)$`, DockerComposeServiceStart)
+	ctx.Given(`^初始化 "([^"]*)" 資料表 Accounts$`, DBServerInit)
+	ctx.Given(`^創建 Data Product Accounts$`, CreateDataProduct)
+	ctx.Given(`^設置 atomic flow 文件$`, InitAtomicService)
+
+	ctx.Then(`^"([^"]*)" 資料表 "([^"]*)" 筆數為 "(\d+)" \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
+	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 新增 "([^"]*)" 筆 \(ID 開始編號 "(\d+)"\)$`, InsertDummyDataFromID)
+	ctx.Then(`^"([^"]*)" 資料表 "([^"]*)" 有與 "([^"]*)" 一致的資料筆數與內容 \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
+	ctx.Given(`^docker compose "([^"]*)" service "([^"]*)" \(in "([^"]*)"\)$`, DockerComposeServiceIn)
+	ctx.Then(`^container "([^"]*)" was "([^"]*)" \(timeout "(\d+)"\)$`, ContainerStateWasTimeoutSeconds)
+	ctx.When(`^container "([^"]*)" ready \(timeout "(\d+)"\)$`, ContainerAndProcessReadyTimeoutSeconds)
+
+	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 更新 "([^"]*)" 筆 - 每筆 Name 的內容加上後綴 updated \(ID 開始編號 "(\d+)"\)$`, UpdateRowDummyDataFromID)
+	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 清空$`, CleanUpTable)
 }
