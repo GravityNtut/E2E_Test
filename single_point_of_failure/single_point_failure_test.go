@@ -522,7 +522,7 @@ func InitAtomicService() error {
 		return err
 	}
 	// 更新 unprocessed_cred.json 的 accessToken 資料並輸出到 unencrypted_cred.json
-	inputFileName := "unprocessed_cred.json"
+	inputFileName := "assets/unprocessed_cred.json"
 	byteValue, err := os.ReadFile(inputFileName)
 	if err != nil {
 		return fmt.Errorf("Failed to read JSON file: %v", err)
@@ -561,7 +561,7 @@ func InitAtomicService() error {
 	}
 
 	// 執行 flowEnc.sh 加密 unencrypted_cred.json 並將輸出導向 flows_cred.json
-	cmd := exec.Command("sh", "./flowEnc.sh", outputFileName,
+	cmd := exec.Command("sh", "./assets/flowEnc.sh", outputFileName,
 		"./assets/atomic", ">", "./assets/atomic/flows_cred.json")
 	credFile, err := os.Create("./assets/atomic/flows_cred.json")
 	if err != nil {
