@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -61,7 +60,7 @@ type Account struct {
 
 var Cmd *exec.Cmd
 
-func getContainerStateByName(ctName string) (*types.ContainerState, error) {
+func GetContainerStateByName(ctName string) (*types.ContainerState, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
@@ -448,28 +447,28 @@ func ExecuteContainerCommand(containerID string, cmd []string) (string, error) {
 	return result, nil
 }
 
-func InitAtomicService(serviceName string) error {
+func GetToken() (string, error) {
 	cmdString := []string{"/gravity-cli", "token", "create", "-s", "nats-jetstream:32803"}
 	result, err := ExecuteContainerCommand("gravity-dispatcher", cmdString)
 	if err != nil {
-		return err
+		return "", err
 	}
 	regexp := regexp.MustCompile(`Token: (.*)`)
 	parts := regexp.FindStringSubmatch(result)
 	if parts == nil {
-		return fmt.Errorf("Failed to get token from result: %s", result)
+		return "", fmt.Errorf("Failed to get token from result: %s", result)
 	}
-	token := parts[1]
-	fmt.Println("Token: ", token)
+	return parts[1], nil
+}
 
-	inputFileName := "test.json"
-	file, err := os.Open(inputFileName)
+func InitAtomicService(serviceName string) error {
+	token, err := GetToken()
 	if err != nil {
-		return fmt.Errorf("Failed to open JSON file: %v", err)
+		return err
 	}
-	defer file.Close()
-
-	byteValue, err := ioutil.ReadAll(file)
+	// 更新 unprocessed_cred.json 的 accessToken 資料並輸出到 unencrypted_cred.json
+	inputFileName := "unprocessed_cred.json"
+	byteValue, err := os.ReadFile(inputFileName)
 	if err != nil {
 		return fmt.Errorf("Failed to read JSON file: %v", err)
 	}
@@ -479,13 +478,13 @@ func InitAtomicService(serviceName string) error {
 		return fmt.Errorf("Failed to parse JSON file: %v", err)
 	}
 
-	for _, v := range data {
-		if _, ok := v["accessToken"]; ok {
-			v["accessToken"] = token
+	for _, component := range data {
+		if _, exist := component["accessToken"]; exist {
+			component["accessToken"] = token
 		}
 	}
 
-	outputFileName := "output.json"
+	outputFileName := "tmp/unencrypted_cred.json"
 	modifiedFile, err := os.Create(outputFileName)
 	if err != nil {
 		return fmt.Errorf("Failed to create output JSON file: %v", err)
@@ -496,12 +495,13 @@ func InitAtomicService(serviceName string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to marshal modified JSON: %v", err)
 	}
-	fmt.Println("modifiedJSON: ", string(modifiedJSON))
 
 	if _, err := modifiedFile.Write(modifiedJSON); err != nil {
-		return fmt.Errorf("Failed to write to output JSON file: %v", err)
+		return fmt.Errorf("Failed to write to %s JSON file: %v", outputFileName, err)
 	}
-	cmd := exec.Command("sh", "./flowEnc.sh", "output.json",
+
+	// 執行 flowEnc.sh 加密 unencrypted_cred.json 並將輸出導向 flows_cred.json
+	cmd := exec.Command("sh", "./flowEnc.sh", outputFileName,
 		"./assets/atomic", ">", "./assets/atomic/flows_cred.json")
 	credFile, err := os.Create("./assets/atomic/flows_cred.json")
 	if err != nil {
@@ -525,7 +525,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 筆數為 "(\d+)" \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
 	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 新增 "([^"]*)" 筆 \(ID 開始編號 "(\d+)"\)$`, InsertDummyDataFromID)
-	// ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 有與 "([^"]*)" 一致的資料筆數與內容 \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
+	ctx.Step(`^"([^"]*)" 資料表 "([^"]*)" 有與 "([^"]*)" 一致的資料筆數與內容 \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
 	// // ctx.Step(`^container "([^"]*)" and process "([^"]*)" ready \(timeout "(\d+)"\)$`, containerAndProcessReadyTimeoutSeconds)
 	// ctx.Step(`^container "([^"]*)" was "([^"]*)" \(timeout "(\d+)"\)$`, containerStateWasTimeoutSeconds)
 	// ctx.Step(`^測試資料庫 "([^"]*)" 連線資訊:$`, dbServerInfoSetup)

@@ -13,7 +13,7 @@ Feature: Gravity2 MSSQL to MySQL - 無資料異動時 - 元件重啟
         
         Then "source-mssql" 資料表 "Accounts" 筆數為 "0" (timeout "3")
         Given "source-mssql" 資料表 "Accounts" 新增 "1000" 筆 (ID 開始編號 "1")
-        # Then "target-mysql" 資料表 "Accounts" 有與 "source-mssql" 一致的資料筆數與內容 (timeout "90")
+        Then "target-mysql" 資料表 "Accounts" 有與 "source-mssql" 一致的資料筆數與內容 (timeout "90")
         # Given docker-compose "stop" service "<RestartService>" (in "foreground")
         # Then container "<RestartService>" was "exited" (timeout "120")
         # Given docker-compose "start" service "<RestartService>" (in "foreground")

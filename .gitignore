@@ -20,6 +20,7 @@
 # Go workspace file
 go.work
 
-flows*.json
-.flows*.json
+**/flows_cred.json
+**/.flows*.json
 .npm/
+tmp/
