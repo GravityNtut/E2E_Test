@@ -20,6 +20,8 @@
 # Go workspace file
 go.work
 
+gravity-cli
+
 **/flows_cred.json
 **/.flows*.json
 .npm/
