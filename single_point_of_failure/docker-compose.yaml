@@ -1,0 +1,141 @@
+version: '3'
+services:
+  nats-jetstream:
+    image: "nats:2.10.14-alpine3.19"
+    container_name: "nats-jetstream"
+    ports:
+      - "32803:32803"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        nats-server --port 32803 --js --http_port 8222 --store_dir /data
+    networks:
+      - nats
+
+  source-mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: "source-mssql"
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=1qaz@WSX
+      - MSSQL_AGENT_ENABLED=true
+      - TESTDB_INIT_SQL=/assets/mssql/create_source.sql
+    ports:
+      - 31433:1433
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/mssql/bin/sqlservr
+    networks:
+      - nats
+
+  target-mysql:
+    image: mysql:8.0.33
+    container_name: "target-mysql"
+    environment:
+      - MYSQL_USER=mysql
+      - MYSQL_PASSWORD=1qaz@WSX
+      - MYSQL_ROOT_PASSWORD=1qaz@WSXROOT
+      - MYSQL_DATABASE=TargetTestDB
+    ports:
+      - 33306:3306
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        docker-entrypoint.sh mysqld
+    networks:
+      - nats
+
+  gravity-adapter-mssql:
+    image: ghcr.io/brobridgeorg/gravity/gravity-adapter-mssql:v3.0.5
+    # restart: always
+    container_name: "gravity-adapter-mssql"
+    depends_on:
+      - "nats-jetstream"
+      - "source-mssql"
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        sh /startup.sh
+    networks:
+      - nats
+    environment:
+      - GRAVITY_DEBUG=debug
+      - GRAVITY_ADAPTER_MSSQL_GRAVITY_HOST=nats-jetstream
+      - GRAVITY_ADAPTER_MSSQL_GRAVITY_PORT=32803
+      - GRAVITY_ADAPTER_MSSQL_GRAVITY_DOMAIN=default
+      - |
+        GRAVITY_ADAPTER_MSSQL_SOURCE_SETTINGS=
+        {
+          "sources": {
+            "mssql_example": {
+              "disabled": false,
+              "host": "source-mssql",
+              "port": 1433,
+              "username": "SA",
+              "password": "1qaz@WSX",
+              "dbname": "TestDB",
+              "param": "",
+              "initialLoad": true,
+              "interval": 2,
+              "tables": {
+                "dbo.Accounts": {
+                  "events": {
+                    "snapshot": "accountInitialized",
+                    "create": "accountCreated",
+                    "update": "accountUpdated",
+                    "delete": "accountDeleted"
+                  }
+                }
+              }
+            }
+          }
+        }
+      - GRAVITY_ADAPTER_MSSQL_STORE_ENABLED=true
+      - GRAVITY_ADAPTER_MSSQL_STORE_PATH=/statestore
+
+  gravity-dispatcher:
+    image: "gravityntut/dispatcher:latest"
+    # restart: always
+    container_name: "gravity-dispatcher"
+    environment:
+      - GRAVITY_DISPATCHER_GRAVITY_HOST=nats-jetstream
+      - GRAVITY_DISPATCHER_GRAVITY_PORT=32803
+    depends_on:
+      - "nats-jetstream"
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        /gravity-dispatcher
+    volumes:
+      - "./assets/dispatcher:/assets/dispatcher"
+    networks:
+      - nats
+
+  atomic:
+    image: "ghcr.io/brobridgeorg/atomic/atomic:v0.0.5-20231012-ubi"
+    # restart: always
+    container_name: "atomic"
+    depends_on:
+      - "nats-jetstream"
+      - "target-mysql"
+      - "gravity-dispatcher"
+    user: "1000:1001"
+    ports:
+      - 1880:1880
+    volumes:
+      - "./assets/atomic:/data/atomic"
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        npm start --cache /data/atomic/.npm -- --userDir /data/atomic /data/atomic/flows.json
+    networks:
+      - nats
+networks:
+  nats: {}
