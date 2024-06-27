@@ -1,31 +1,31 @@
-Feature: Gravity2 MSSQL to MySQL - 無資料異動時 - 元件重啟
-    Scenario: 初始化測試環境
-        Given 創建所有服務
-        Given 讀取初始設定檔
-        Given 啟動 "source-mssql" 服務 (timeout "60")
-        Given 初始化 "source-mssql" 資料表 Accounts
-        Given 啟動 "target-mysql" 服務 (timeout "60")
-        Given 初始化 "target-mysql" 資料表 Accounts
-        Given 啟動 "nats-jetstream" 服務 (timeout "60")
-        Given 啟動 "gravity-dispatcher" 服務 (timeout "60")
-        Given 創建 Data Product Accounts
-        Given 設置 atomic flow 文件
-        Given 啟動 "atomic" 服務 (timeout "60")
-        Given 啟動 "gravity-adapter-mssql" 服務 (timeout "60")
+Feature: Gravity2 MSSQL to MySQL - No data changes - Component restart
+    Scenario: Initialize the test environment
+        Given Create all services
+        Given Load the initial configuration file
+        Given Start the "source-mssql" service (timeout "60")
+        Given Initialize the "source-mssql" table Accounts
+        Given Start the "target-mysql" service (timeout "60")
+        Given Initialize the "target-mysql" table Accounts
+        Given Start the "nats-jetstream" service (timeout "60")
+        Given Start the "gravity-dispatcher" service (timeout "60")
+        Given Create Data Product Accounts
+        Given Set up atomic flow document
+        Given Start the "atomic" service (timeout "60")
+        Given Start the "gravity-adapter-mssql" service (timeout "60")
         
-    Scenario: 異動同步後重啟元件，等待元件啟動完成，接著新增/更新/刪除資料
-        Then "source-mssql" 資料表 "Accounts" 筆數為 "0" (timeout "3")
-        Given "source-mssql" 資料表 "Accounts" 新增 "1000" 筆 (ID 開始編號 "1")
-        Then "target-mysql" 資料表 "Accounts" 有與 "source-mssql" 一致的資料筆數與內容 (timeout "90")
+    Scenario: After synchronizing changes, restart the component, wait for it to start, then add/update/delete data
+        Then "source-mssql" table "Accounts" has 0 records (timeout "3")
+        Given "source-mssql" table "Accounts" added "1000" records (starting ID "1")
+        Then "target-mysql" table "Accounts" matches "source-mssql" in both record count and content (timeout "90")
         Given docker compose "stop" service "<RestartService>" (in "foreground")
         Then container "<RestartService>" was "exited" (timeout "120")
         Given docker compose "start" service "<RestartService>" (in "foreground")
         When container "<RestartService>" ready (timeout "120")
-        Given "source-mssql" 資料表 "Accounts" 更新 "1000" 筆 - 每筆 Name 的內容加上後綴 updated (ID 開始編號 "1")
-        Given "source-mssql" 資料表 "Accounts" 新增 "1000" 筆 (ID 開始編號 "1001")
-        Then "target-mysql" 資料表 "Accounts" 有與 "source-mssql" 一致的資料筆數與內容 (timeout "90")
-        Given "source-mssql" 資料表 "Accounts" 清空
-        Then "target-mysql" 資料表 "Accounts" 筆數為 "0" (timeout "120")
+        Given "source-mssql" table "Accounts" updated "1000" records - appending suffix 'updated' to each Name field (starting ID "1")
+        Given "source-mssql" table "Accounts" added "1000" records (starting ID "1001")
+        Then "target-mysql" table "Accounts" matches "source-mssql" in both record count and content (timeout "90")
+        Given "source-mssql" table "Accounts" cleared
+        Then "target-mysql" table "Accounts" has 0 records (timeout "120")
 
         Examples:
             |   RestartService      |
@@ -36,5 +36,5 @@ Feature: Gravity2 MSSQL to MySQL - 無資料異動時 - 元件重啟
             | source-mssql          |
             | target-mysql          |
 
-    Scenario: 清除測試環境
-        Given 刪除所有服務
+    Scenario: Clear the test environment
+        Given Close all services

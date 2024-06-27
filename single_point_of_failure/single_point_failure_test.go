@@ -235,7 +235,7 @@ func DatabaseLifeCheck(dialector gorm.Dialector, timeout int) (*gorm.DB, error) 
 	for i := 0; i < timeout; i += 5 {
 		db, err := gorm.Open(dialector, &gorm.Config{})
 		if err != nil {
-			log.Infof("正在嘗試連接至 %s Database (%d sec)", dialector.Name(), i)
+			log.Infof("Attempting to connect to %s Database (%d sec)", dialector.Name(), i)
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -248,26 +248,26 @@ func DatabaseLifeCheck(dialector gorm.Dialector, timeout int) (*gorm.DB, error) 
 		}
 
 		if err := sqlDB.Ping(); err != nil {
-			log.Infof("正在等待 %s Database 可用 (%d sec)", dialector.Name(), i)
+			log.Infof("Waiting for %s Database to become available (%d sec)", dialector.Name(), i)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 		return db, nil
 	}
-	return nil, fmt.Errorf("連接至 %s Database 逾時", dialector.Name())
+	return nil, fmt.Errorf("Timeout connecting to the %s Database", dialector.Name())
 }
 
 func NatsLifeCheck(timeout int) (*nats.Conn, error) {
 	for i := 0; i < timeout; i++ {
 		nc, err := nats.Connect("nats://127.0.0.1:32803")
 		if err != nil {
-			log.Infoln("無法連接至 NATS 伺服器，等待 1 秒後重試")
+			log.Infoln("Unable to connect to the NATS server. Retry after 1 second")
 			time.Sleep(1 * time.Second)
 			continue
 		}
 		return nc, nil
 	}
-	return nil, fmt.Errorf("連接至 NATS 伺服器逾時")
+	return nil, fmt.Errorf("Timeout connecting to NATS server")
 }
 
 func ContainerLifeCheck(ctName, psName string, timeout int) error {
@@ -282,7 +282,7 @@ func ContainerLifeCheck(ctName, psName string, timeout int) error {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	return fmt.Errorf("服務 '%s' 在 %d秒 後逾時未啟動", ctName, timeout)
+	return fmt.Errorf("The service '%s' timed out and did not start within %d seconds", ctName, timeout)
 
 }
 
@@ -521,7 +521,7 @@ func InitAtomicService() error {
 	if err != nil {
 		return err
 	}
-	// 更新 unprocessed_cred.json 的 accessToken 資料並輸出到 unencrypted_cred.json
+	// Update the accessToken data in unprocessed_cred.json and output to unencrypted_cred.json
 	inputFileName := "assets/unprocessed_cred.json"
 	byteValue, err := os.ReadFile(inputFileName)
 	if err != nil {
@@ -560,7 +560,7 @@ func InitAtomicService() error {
 		return fmt.Errorf("Failed to write to %s JSON file: %v", outputFileName, err)
 	}
 
-	// 執行 flowEnc.sh 加密 unencrypted_cred.json 並將輸出導向 flows_cred.json
+	// Execute flowEnc.sh to encrypt unencrypted_cred.json and redirect the output to flows_cred.json
 	cmd := exec.Command("sh", "./assets/flowEnc.sh", outputFileName,
 		"./assets/atomic", ">", "./assets/atomic/flows_cred.json")
 	credFile, err := os.Create("./assets/atomic/flows_cred.json")
@@ -592,12 +592,12 @@ func DockerComposeServiceIn(action, serviceName, executionMode string) error {
 
 	switch executionMode {
 	case "foreground":
-		// 在前景執行命令, 等待命令執行結束
+		// Execute the command in foreground and wait for its completion
 		if err := cmd.Run(); err != nil {
 			log.Fatal(err)
 		}
 	case "background":
-		// 在背景執行命令，不等待命令執行結束
+		// Execute the command in the background without waiting for its completion
 		if err := cmd.Start(); err != nil {
 			log.Fatal(err)
 		}
@@ -657,7 +657,7 @@ func CheckProcessRunningInContainer(containerName, processName string) error {
 				return err
 			}
 			for _, processInfo := range processes.Processes {
-				cmdLine := processInfo[7] // Top 看到的一行資訊，第 8 個欄位是執行的 command line
+				cmdLine := processInfo[7] // In the output of top, the 8th column represents the command line of the process being executed
 				// log.Infof("command line: %s", cmdLine)
 				if cmdLine == "/"+processName || cmdLine == processName {
 					return nil
@@ -735,7 +735,7 @@ func UpdateRowDummyDataFromID(loc, tableName string, total, beginID int) error {
 	start := time.Now()
 
 	for i := beginID; i < total+beginID; i++ {
-		// 更新 Name 欄位
+		// Update the Name field
 		err = db.Table("Accounts").Where("ID = ?", i).Update("Name", gorm.Expr("CONCAT(Name, ?)", " updated")).Error
 		if err != nil {
 			log.Errorf("Failed to insert '%d th' record: %v", i, err)
@@ -769,21 +769,21 @@ func CleanUpTable(loc, tableName string) error {
 }
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
-	ctx.Given(`^創建所有服務$`, CreateServices)
-	ctx.Given(`^刪除所有服務$`, CloseAllServices)
-	ctx.Given(`^讀取初始設定檔$`, LoadConfig)
-	ctx.Given(`^啟動 "([^"]*)" 服務 \(timeout "(\d+)"\)$`, DockerComposeServiceStart)
-	ctx.Given(`^初始化 "([^"]*)" 資料表 Accounts$`, DBServerInit)
-	ctx.Given(`^創建 Data Product Accounts$`, CreateDataProduct)
-	ctx.Given(`^設置 atomic flow 文件$`, InitAtomicService)
+	ctx.Given(`^Create all services$`, CreateServices)
+	ctx.Given(`^Close all services$`, CloseAllServices)
+	ctx.Given(`^Load the initial configuration file$`, LoadConfig)
+	ctx.Given(`^Start the "([^"]*)" service \(timeout "(\d+)"\)$`, DockerComposeServiceStart)
+	ctx.Given(`^Initialize the "([^"]*)" table Accounts$`, DBServerInit)
+	ctx.Given(`^Create Data Product Accounts$`, CreateDataProduct)
+	ctx.Given(`^Set up atomic flow document$`, InitAtomicService)
 
-	ctx.Then(`^"([^"]*)" 資料表 "([^"]*)" 筆數為 "(\d+)" \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
-	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 新增 "([^"]*)" 筆 \(ID 開始編號 "(\d+)"\)$`, InsertDummyDataFromID)
-	ctx.Then(`^"([^"]*)" 資料表 "([^"]*)" 有與 "([^"]*)" 一致的資料筆數與內容 \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
+	ctx.Then(`^"([^"]*)" table "([^"]*)" has "(\d+)" records \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" added "([^"]*)" records \(starting ID "(\d+)"\)$`, InsertDummyDataFromID)
+	ctx.Then(`^"([^"]*)" table "([^"]*)" matches "([^"]*)" in both record count and content \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
 	ctx.Given(`^docker compose "([^"]*)" service "([^"]*)" \(in "([^"]*)"\)$`, DockerComposeServiceIn)
 	ctx.Then(`^container "([^"]*)" was "([^"]*)" \(timeout "(\d+)"\)$`, ContainerStateWasTimeoutSeconds)
 	ctx.When(`^container "([^"]*)" ready \(timeout "(\d+)"\)$`, ContainerAndProcessReadyTimeoutSeconds)
 
-	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 更新 "([^"]*)" 筆 - 每筆 Name 的內容加上後綴 updated \(ID 開始編號 "(\d+)"\)$`, UpdateRowDummyDataFromID)
-	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 清空$`, CleanUpTable)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" updated "([^"]*)" records - appending suffix 'updated' to each Name field \(starting ID "(\d+)"\)$`, UpdateRowDummyDataFromID)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" cleared$`, CleanUpTable)
 }
