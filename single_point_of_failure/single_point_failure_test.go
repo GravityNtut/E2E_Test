@@ -104,7 +104,7 @@ func GetContainerStateByName(ctName string) (*types.ContainerState, error) {
 	containerInfo, err := cli.ContainerInspect(context.Background(), ctName)
 	if err != nil {
 		if client.IsErrNotFound(err) {
-			return nil, fmt.Errorf("Container name %s is not found", ctName)
+			return nil, fmt.Errorf("container name %s is not found", ctName)
 		}
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func ConnectToDB(s *serverInfo) (*gorm.DB, error) {
 			s.Username, s.Password, s.Host, s.Port, s.Database)
 		db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 		if err != nil {
-			return nil, fmt.Errorf("Failed to connect to database: %v", err)
+			return nil, fmt.Errorf("failed to connect to database: %v", err)
 		}
 		return db, nil
 	} else if s.Type == "mssql" {
@@ -126,11 +126,11 @@ func ConnectToDB(s *serverInfo) (*gorm.DB, error) {
 			s.Username, s.Password, s.Host, s.Port, s.Database)
 		db, err := gorm.Open(sqlserver.Open(dsn), &gorm.Config{})
 		if err != nil {
-			return nil, fmt.Errorf("Failed to connect to database: %v", err)
+			return nil, fmt.Errorf("failed to connect to database: %v", err)
 		}
 		return db, nil
 	}
-	return nil, fmt.Errorf("Invalid database type '%s'", s.Type)
+	return nil, fmt.Errorf("invalid database type '%s'", s.Type)
 }
 
 func LoadConfig() error {
@@ -152,7 +152,7 @@ func CreateTestDB(dialector gorm.Dialector, createTestDBFilePath string) error {
 	}
 	str, err := os.ReadFile(createTestDBFilePath)
 	if err != nil {
-		return fmt.Errorf("Failed to read create_test_db.sql: %v", err)
+		return fmt.Errorf("failed to read create_test_db.sql: %v", err)
 	}
 	db.Exec(string(str))
 	return nil
@@ -162,19 +162,19 @@ func InitAccountTable(s *serverInfo, createTableFilePath string) error {
 	var err error
 	sourceDB, err := ConnectToDB(s)
 	if err != nil {
-		return fmt.Errorf("Failed to connect to '%s' database: %v", s.Type, err)
+		return fmt.Errorf("failed to connect to '%s' database: %v", s.Type, err)
 	}
 
 	db, err := sourceDB.DB()
 	if err != nil {
-		return fmt.Errorf("Failed to connect to '%s' database: %v", s.Type, err)
+		return fmt.Errorf("failed to connect to '%s' database: %v", s.Type, err)
 	}
 	str, err := os.ReadFile(createTableFilePath)
 	if err != nil {
-		return fmt.Errorf("Failed to read create_table.sql: %v", err)
+		return fmt.Errorf("failed to read create_table.sql: %v", err)
 	}
 	if _, err := db.Exec(string(str)); err != nil {
-		return fmt.Errorf("Failed to create table: %v", err)
+		return fmt.Errorf("failed to create table: %v", err)
 	}
 	return nil
 }
@@ -208,7 +208,7 @@ func DBServerInit(dbStr string) error {
 		serverInfo = &config.TargetDB
 		createTableFilePath = "./assets/mysql/create_table.sql"
 	default:
-		return fmt.Errorf("Invalid database type '%s'", dbStr)
+		return fmt.Errorf("invalid database type '%s'", dbStr)
 	}
 
 	if err := CreateTestDB(dialector, createTestDBFilePath); err != nil {
@@ -223,10 +223,10 @@ func DBServerInit(dbStr string) error {
 func DockerComposeServiceStart(serviceName string, timeout int) error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return fmt.Errorf("Failed to create docker client: %v", err)
+		return fmt.Errorf("failed to create docker client: %v", err)
 	}
 	if err := cli.ContainerStart(context.Background(), serviceName, container.StartOptions{}); err != nil {
-		return fmt.Errorf("Failed to start container '%s': %v", serviceName, err)
+		return fmt.Errorf("failed to start container '%s': %v", serviceName, err)
 	}
 	return ContainerAndProcessReadyTimeoutSeconds(serviceName, timeout)
 }
@@ -254,7 +254,7 @@ func DatabaseLifeCheck(dialector gorm.Dialector, timeout int) (*gorm.DB, error) 
 		}
 		return db, nil
 	}
-	return nil, fmt.Errorf("Timeout connecting to the %s Database", dialector.Name())
+	return nil, fmt.Errorf("timeout connecting to the %s Database", dialector.Name())
 }
 
 func NatsLifeCheck(timeout int) (*nats.Conn, error) {
@@ -267,7 +267,7 @@ func NatsLifeCheck(timeout int) (*nats.Conn, error) {
 		}
 		return nc, nil
 	}
-	return nil, fmt.Errorf("Timeout connecting to NATS server")
+	return nil, fmt.Errorf("timeout connecting to NATS server")
 }
 
 func ContainerLifeCheck(ctName, psName string, timeout int) error {
@@ -282,7 +282,7 @@ func ContainerLifeCheck(ctName, psName string, timeout int) error {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	return fmt.Errorf("The service '%s' timed out and did not start within %d seconds", ctName, timeout)
+	return fmt.Errorf("the service '%s' timed out within %d seconds", ctName, timeout)
 
 }
 
@@ -310,7 +310,7 @@ func GetDBInstance(loc string) (*gorm.DB, error) {
 	case TargetMySQL:
 		return ConnectToDB(&config.TargetDB)
 	default:
-		return nil, fmt.Errorf("Invalid database location '%s'", loc)
+		return nil, fmt.Errorf("invalid database location '%s'", loc)
 	}
 
 }
@@ -333,7 +333,7 @@ func VerifyRowCountTimeoutSeconds(loc, tableName string, expectedRowCount, timeo
 		time.Sleep(1 * time.Second)
 	}
 
-	return fmt.Errorf("Expected %d records, but got %d", expectedRowCount, currRowCount)
+	return fmt.Errorf("expected %d records, but got %d", expectedRowCount, currRowCount)
 }
 
 func InsertDummyDataFromID(loc, tableName string, total int, beginID int) error {
@@ -420,7 +420,7 @@ func GetCount(db *gorm.DB, tableName string) (int64, error) {
 	return count, err
 }
 
-func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, tableName, locFrom string, timeoutSec int) error {
+func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, locFrom string, tableName string, timeoutSec int) error {
 	// compare source/target table row count
 	sourceDB, err := GetDBInstance(locFrom)
 	if err != nil {
@@ -452,7 +452,7 @@ func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, tableName, locFrom stri
 	}
 
 	if retry+1 == timeoutSec {
-		return fmt.Errorf("Number of records in table '%s' is %d, expected %d after %d second",
+		return fmt.Errorf("number of records in table '%s' is %d, expected %d after %d second",
 			tableName, targetRowCount, srcRowCount, timeoutSec)
 	}
 
@@ -473,7 +473,7 @@ func ExecuteContainerCommand(containerID string, cmd []string) (string, error) {
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return "", fmt.Errorf("Error creating Docker client: %v", err)
+		return "", fmt.Errorf("error creating Docker client: %v", err)
 	}
 
 	execConfig := types.ExecConfig{
@@ -490,7 +490,7 @@ func ExecuteContainerCommand(containerID string, cmd []string) (string, error) {
 
 	resp, err := cli.ContainerExecAttach(ctx, execIDResp.ID, types.ExecStartCheck{})
 	if err != nil {
-		return "", fmt.Errorf("Error attaching to exec instance: %v", err)
+		return "", fmt.Errorf("error attaching to exec instance: %v", err)
 	}
 	defer resp.Close()
 
@@ -511,7 +511,7 @@ func GetToken() (string, error) {
 	regexp := regexp.MustCompile(`Token: (.*)`)
 	parts := regexp.FindStringSubmatch(result)
 	if parts == nil {
-		return "", fmt.Errorf("Failed to get token from result: %s", result)
+		return "", fmt.Errorf("failed to get token from result: %s", result)
 	}
 	return parts[1], nil
 }
@@ -525,12 +525,12 @@ func InitAtomicService() error {
 	inputFileName := "assets/unprocessed_cred.json"
 	byteValue, err := os.ReadFile(inputFileName)
 	if err != nil {
-		return fmt.Errorf("Failed to read JSON file: %v", err)
+		return fmt.Errorf("failed to read JSON file: %v", err)
 	}
 
 	var data map[string]map[string]string
 	if err := json.Unmarshal(byteValue, &data); err != nil {
-		return fmt.Errorf("Failed to parse JSON file: %v", err)
+		return fmt.Errorf("failed to parse JSON file: %v", err)
 	}
 
 	for _, component := range data {
@@ -542,7 +542,7 @@ func InitAtomicService() error {
 	outputFileName := "tmp/unencrypted_cred.json"
 	modifiedFile, err := os.Create(outputFileName)
 	if err != nil {
-		return fmt.Errorf("Failed to create output JSON file: %v", err)
+		return fmt.Errorf("failed to create output JSON file: %v", err)
 	}
 
 	defer func() {
@@ -553,11 +553,11 @@ func InitAtomicService() error {
 
 	modifiedJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return fmt.Errorf("Failed to marshal modified JSON: %v", err)
+		return fmt.Errorf("failed to marshal modified JSON: %v", err)
 	}
 
 	if _, err := modifiedFile.Write(modifiedJSON); err != nil {
-		return fmt.Errorf("Failed to write to %s JSON file: %v", outputFileName, err)
+		return fmt.Errorf("failed to write to %s JSON file: %v", outputFileName, err)
 	}
 
 	// Execute flowEnc.sh to encrypt unencrypted_cred.json and redirect the output to flows_cred.json
@@ -565,25 +565,25 @@ func InitAtomicService() error {
 		"./assets/atomic", ">", "./assets/atomic/flows_cred.json")
 	credFile, err := os.Create("./assets/atomic/flows_cred.json")
 	if err != nil {
-		return fmt.Errorf("Failed to create flows_cred.json: %v", err)
+		return fmt.Errorf("failed to create flows_cred.json: %v", err)
 	}
 	var stderr bytes.Buffer
 	cmd.Stdout = credFile
 	cmd.Stderr = &stderr
 	err = cmd.Run()
 	if err != nil {
-		return fmt.Errorf("Failed to execute flowEnc.sh: %s", stderr.String())
+		return fmt.Errorf("failed to execute flowEnc.sh: %s", stderr.String())
 	}
 	return nil
 }
 
 func DockerComposeServiceIn(action, serviceName, executionMode string) error {
 	if action != "start" && action != "stop" && action != "restart" {
-		return fmt.Errorf("Invalid docker-compose action '%s'", action)
+		return fmt.Errorf("invalid docker-compose action '%s'", action)
 	}
 
 	if executionMode != "foreground" && executionMode != "background" {
-		return fmt.Errorf("Invalid docker compose execution mode '%s'", executionMode)
+		return fmt.Errorf("invalid docker compose execution mode '%s'", executionMode)
 	}
 
 	cmd := exec.Command("docker", "compose", "-f", DockerComposeFile, action, serviceName)
@@ -623,7 +623,7 @@ func ContainerStateWasTimeoutSeconds(ctName string, expectedState string, timeou
 				return nil
 			}
 		} else {
-			log.Errorf("Failed to get container '%s' state: %s", ctName, err.Error())
+			log.Errorf("failed to get container '%s' state: %s", ctName, err.Error())
 		}
 		if i%10 == 0 {
 			log.Infof("Waiting for container '%s' state to be '%s'.. (%d sec)", ctName, expectedState, i)
@@ -632,9 +632,9 @@ func ContainerStateWasTimeoutSeconds(ctName string, expectedState string, timeou
 	}
 
 	if state != nil {
-		log.Errorf("Container '%s' state expected '%s', but got '%s' after %d sec", ctName, expectedState, state.Status, i)
+		log.Errorf("container '%s' state expected '%s', but got '%s' after %d sec", ctName, expectedState, state.Status, i)
 	} else {
-		log.Errorf("Container '%s' state expected '%s', but not found after %d sec", ctName, expectedState, i)
+		log.Errorf("container '%s' state expected '%s', but not found after %d sec", ctName, expectedState, i)
 	}
 	return err
 }
@@ -679,7 +679,7 @@ func CheckProcessRunningInContainer(containerName, processName string) error {
 		}
 	}
 
-	return fmt.Errorf("Process %s is not running in container %s", processName, containerName)
+	return fmt.Errorf("process %s is not running in container %s", processName, containerName)
 }
 
 func ContainerAndProcessReadyTimeoutSeconds(ctName string, timeoutSec int) error {
@@ -719,7 +719,7 @@ func ContainerAndProcessReadyTimeoutSeconds(ctName string, timeoutSec int) error
 		}
 		return nil
 	default:
-		return fmt.Errorf("Invalid container name '%s'", ctName)
+		return fmt.Errorf("invalid container name '%s'", ctName)
 	}
 }
 
@@ -738,7 +738,7 @@ func UpdateRowDummyDataFromID(loc, tableName string, total, beginID int) error {
 		// Update the Name field
 		err = db.Table("Accounts").Where("ID = ?", i).Update("Name", gorm.Expr("CONCAT(Name, ?)", " updated")).Error
 		if err != nil {
-			log.Errorf("Failed to insert '%d th' record: %v", i, err)
+			log.Errorf("failed to insert '%d th' record: %v", i, err)
 			opFailed++
 		}
 	}
@@ -757,13 +757,13 @@ func CleanUpTable(loc, tableName string) error {
 	// Clean up
 	result := db.Exec(fmt.Sprintf("DELETE FROM %s", tableName))
 	if result.Error != nil {
-		return fmt.Errorf("Failed to exec clean up '%s' table '%s': %v", loc, tableName, result.Error)
+		return fmt.Errorf("failed to exec clean up '%s' table '%s': %v", loc, tableName, result.Error)
 	}
 
 	var rowCount int64
 	db.Table(tableName).Count(&rowCount)
 	if rowCount != 0 {
-		return fmt.Errorf("Failed to clean up '%s' table '%s'", loc, tableName)
+		return fmt.Errorf("failed to clean up '%s' table '%s'", loc, tableName)
 	}
 	return nil
 }
@@ -777,13 +777,13 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Given(`^Create Data Product Accounts$`, CreateDataProduct)
 	ctx.Given(`^Set up atomic flow document$`, InitAtomicService)
 
-	ctx.Then(`^"([^"]*)" table "([^"]*)" has "(\d+)" records \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
-	ctx.Given(`^"([^"]*)" table "([^"]*)" added "([^"]*)" records \(starting ID "(\d+)"\)$`, InsertDummyDataFromID)
-	ctx.Then(`^"([^"]*)" table "([^"]*)" matches "([^"]*)" in both record count and content \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
+	ctx.Then(`^"([^"]*)" table "([^"]*)" has "(\d+)" datas \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" added "([^"]*)" datas \(starting ID "(\d+)"\)$`, InsertDummyDataFromID)
+	ctx.Then(`^"([^"]*)" has the same content as "([^"]*)" in "([^"]*)" \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
 	ctx.Given(`^docker compose "([^"]*)" service "([^"]*)" \(in "([^"]*)"\)$`, DockerComposeServiceIn)
 	ctx.Then(`^container "([^"]*)" was "([^"]*)" \(timeout "(\d+)"\)$`, ContainerStateWasTimeoutSeconds)
 	ctx.When(`^container "([^"]*)" ready \(timeout "(\d+)"\)$`, ContainerAndProcessReadyTimeoutSeconds)
 
-	ctx.Given(`^"([^"]*)" table "([^"]*)" updated "([^"]*)" records - appending suffix 'updated' to each Name field \(starting ID "(\d+)"\)$`, UpdateRowDummyDataFromID)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" updated "([^"]*)" datas - appending suffix 'updated' to each Name field \(starting ID "(\d+)"\)$`, UpdateRowDummyDataFromID)
 	ctx.Given(`^"([^"]*)" table "([^"]*)" cleared$`, CleanUpTable)
 }
