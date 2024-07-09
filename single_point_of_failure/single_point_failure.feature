@@ -36,5 +36,3 @@ Feature: Gravity2 MSSQL to MySQL - Component restart while No data changes
             | source-mssql          |
             | target-mysql          |
 
-    Scenario: Clear the test environment
-        Given Close all services
