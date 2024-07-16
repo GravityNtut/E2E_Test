@@ -465,7 +465,7 @@ func InsertDummyDataFromIDGoroutine(loc, tableName string, total int, beginID in
 
 func CompareRecords(sourceDB, targetDB *gorm.DB) (int, error) {
 	var (
-		limit    = 20000
+		limit    = 10000
 		offset   = 0
 		moreData = true
 
@@ -546,8 +546,8 @@ func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, locFrom string, tableNa
 		time.Sleep(1 * time.Second)
 	}
 
-	if retry+1 == timeoutSec {
-		return fmt.Errorf("number of records in table '%s' is %d, expected %d after %d second",
+		if retry == timeoutSec {
+		return fmt.Errorf("Number of records in table '%s' is %d, expected %d after %d second",
 			tableName, targetRowCount, srcRowCount, timeoutSec)
 	}
 
@@ -1109,8 +1109,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Given(`^"([^"]*)" table "([^"]*)" updated "([^"]*)" datas - appending suffix 'updated' to each Name field \(starting ID "(\d+)"\)$`, UpdateRowDummyDataFromID)
 	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 開始持續更新 "([^"]*)" 筆 - 每筆 Name 的內容加上後綴 updated \(ID 開始編號 "(\d+)"\) 並新增 "([^"]*)" 筆 \(ID 開始編號 "(\d+)"\)$`, UpdateRowAndInsertDummyDataFromIDGoroutine)
-	ctx.Then(`^等待 "([^"]*)" 資料表 "([^"]*)" 更新完成 \(timeout "([^"]*)"\) 及新增完成 \(timeout "([^"]*)"\)$`, WaitForUpdateAndInsertDone)
 	ctx.Given(`^"([^"]*)" table "([^"]*)" cleared$`, CleanUpTable)
+	ctx.Then(`^等待 "([^"]*)" 資料表 "([^"]*)" 更新完成及新增完成 \(timeout "([^"]*)"\)$`, WaitForUpdateAndInsertDone)
 	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 開始持續清空$`, CleanUpTableGoroutine)
 	ctx.Then(`^等待 "([^"]*)" 資料表 "([^"]*)" 清空完成 \(timeout "([^"]*)"\)$`, WaitForDeleteDone)
 }
