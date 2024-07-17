@@ -14,7 +14,7 @@ Feature: Gravity2 MSSQL to MySQL - Component restart while No data changes
         Given Start the "gravity-adapter-mssql" service (timeout "60")
         
     Scenario: After synchronizing changes, restart the component, wait for it ready, then add, update, or delete data
-        Then "source-mssql" table "Accounts" has 0 datas (timeout "3")
+        Then "source-mssql" table "Accounts" has "0" datas (timeout "3")
         Given "source-mssql" table "Accounts" added "1000" datas (starting ID "1")
         Then "target-mysql" has the same content as "source-mssql" in "Accounts" (timeout "90")
         Given docker compose "stop" service "<RestartService>" (in "foreground")
@@ -25,7 +25,7 @@ Feature: Gravity2 MSSQL to MySQL - Component restart while No data changes
         Given "source-mssql" table "Accounts" added "1000" datas (starting ID "1001")
         Then "target-mysql" has the same content as "source-mssql" in "Accounts" (timeout "90")
         Given "source-mssql" table "Accounts" cleared
-        Then "target-mysql" table "Accounts" has 0 datas (timeout "120")
+        Then "target-mysql" table "Accounts" has "0" datas (timeout "120")
 
         Examples:
             |   RestartService      |
