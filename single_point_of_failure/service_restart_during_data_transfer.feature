@@ -13,31 +13,31 @@ Feature: Gravity2 MSSQL to MySQL - Service restart during data transfer
         Given Start the "atomic" service (timeout "60")
         Given Start the "gravity-adapter-mssql" service (timeout "60")
         
-    Scenario Outline: 資料傳輸期間重啟元件，等待元件啟動完成，接著新增/更新/刪除資料
+    Scenario Outline: Perform insertions, updates, or deletions of data, and restart services during data transfer.
         Then "source-mssql" table "Accounts" has "0" datas (timeout "3")
-        Given "source-mssql" 資料表 "Accounts" 開始持續新增 "3000" 筆 (ID 開始編號 "1")
+        Given "source-mssql" table "Accounts" continuously inserting "3000" datas (starting ID "1")
         Given docker compose "stop" service "<RestartService>" (in "foreground")
         Then container "<RestartService>" was "exited" (timeout "120")
         # Then Wait "20" seconds
         Given docker compose "start" service "<RestartService>" (in "foreground")
         When container "<RestartService>" ready (timeout "120")
-        Then 等待 "source-mssql" 資料表 "Accounts" 新增完成 (timeout "120")
+        Then wait for "source-mssql" table "Accounts" insertion to complete (timeout "120")
         And "target-mysql" has the same content as "source-mssql" in "Accounts" (timeout "90")
-        Given "source-mssql" 資料表 "Accounts" 開始持續更新 "3000" 筆 - 每筆 Name 的內容加上後綴 updated (ID 開始編號 "1") 並新增 "1000" 筆 (ID 開始編號 "3001")
+        Given "source-mssql" table "Accounts" continuously updating "3000" datas - appending suffix 'updated' to each Name field (starting ID "1") and inserting "1000" datas (starting ID "3001")
         Given docker compose "stop" service "<RestartService>" (in "foreground")
         Then container "<RestartService>" was "exited" (timeout "120")
         # Then Wait "20" seconds
         Given docker compose "start" service "<RestartService>" (in "foreground")
         When container "<RestartService>" ready (timeout "120")
-        Then 等待 "source-mssql" 資料表 "Accounts" 更新完成及新增完成 (timeout "120")
+        Then wait for "source-mssql" table "Accounts" update and insertion to complete (timeout "120")
         And "target-mysql" has the same content as "source-mssql" in "Accounts" (timeout "90")
-        Given "source-mssql" 資料表 "Accounts" 開始持續清空
+        Given "source-mssql" table "Accounts" continuous cleanup
         Given docker compose "stop" service "<RestartService>" (in "foreground")
         Then container "<RestartService>" was "exited" (timeout "120")
         # Then Wait "20" seconds
         Given docker compose "start" service "<RestartService>" (in "foreground")
         When container "<RestartService>" ready (timeout "120")
-        Then 等待 "source-mssql" 資料表 "Accounts" 清空完成 (timeout "120")
+        Then wait for "source-mssql" table "Accounts" cleanup to complete (timeout "120")
         And "target-mysql" table "Accounts" has "0" datas (timeout "120")
         
         Examples:

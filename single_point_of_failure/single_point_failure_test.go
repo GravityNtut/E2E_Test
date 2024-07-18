@@ -73,7 +73,7 @@ const (
 	Adapter           = "gravity-adapter-mssql"
 	NatsJetstream     = "nats-jetstream"
 )
-
++
 type SharedState struct {
 	Insertion insertionState
 	Update    updateState
@@ -822,21 +822,6 @@ func WaitSeconds(seconds int) error {
 	return nil
 }
 
-func WaitForInsertionDone(loc, tableName string, timeoutSec int) error {
-	var retry int
-	for retry = 0; retry < timeoutSec; retry++ {
-		select {
-		case <-state.Insertion.Done:
-			log.Infof("'%s' table '%s' insertion done.. (%d sec)", loc, tableName, retry)
-			return nil
-		default:
-			log.Infof("Waiting for '%s' table '%s' insertion done.. (%d sec), current total: %d", loc, tableName, retry, state.Insertion.CurrentTotal)
-			time.Sleep(1 * time.Second)
-		}
-	}
-	return fmt.Errorf("'%s' table '%s' insertion done timeout", loc, tableName)
-}
-
 func UpdateRowDummyDataFromID(loc, tableName string, total, beginID int) error {
 	db, err := GetDBInstance(loc)
 	if err != nil {
@@ -863,26 +848,59 @@ func UpdateRowDummyDataFromID(loc, tableName string, total, beginID int) error {
 	return nil
 }
 
-func WaitForUpdateDone(loc, tableName string, timeoutSec int) error {
-	var retry int
-	for retry = 0; retry < timeoutSec; retry++ {
+func WaitForOperationDone(loc, tableName, op string, timeoutSec int) error {
+	var doneChan chan bool
+	var currentTotal int
+
+	switch op {
+	case "insert":
+		doneChan = state.Insertion.Done
+		currentTotal = state.Insertion.CurrentTotal
+	case "update":
+		doneChan = state.Update.Done
+		currentTotal = state.Update.CurrentTotal
+	case "delete":
+		doneChan = state.Delete.Done
+		currentTotal = 0
+	default:
+		return fmt.Errorf("invalid operation '%s'", op)
+	}
+
+	for retry := 0; retry < timeoutSec; retry++ {
 		select {
-		case <-state.Update.Done:
-			log.Infof("'%s' table '%s' update done.. (%d sec)", loc, tableName, retry)
+		case done := <-doneChan:
+			if !done {
+				return fmt.Errorf("'%s' table '%s' %s failed", loc, tableName, op)
+			}
+			log.Infof("'%s' table '%s' %s done.. (%d sec)", loc, tableName, op, retry)
 			return nil
 		default:
-			log.Infof("Waiting for '%s' table '%s' update done.. (%d sec), current total: %d", loc, tableName, retry, state.Update.CurrentTotal)
+			log.Infof("Waiting for '%s' table '%s' %s done.. (%d sec), current total: %d", loc, tableName, op, retry, currentTotal)
 			time.Sleep(1 * time.Second)
 		}
 	}
 	return fmt.Errorf("'%s' table '%s' update done timeout", loc, tableName)
 }
 
-func WaitForUpdateAndInsertDone(loc, tableName string, timeoutSec int) error {
-	if err := WaitForUpdateDone(loc, tableName, timeoutSec); err != nil {
+func WaitForInsertionDone(loc, tableName string, timeoutSec int) error {
+	if err := WaitForOperationDone(loc, tableName, "insert", timeoutSec); err != nil {
 		return err
 	}
-	if err := WaitForInsertionDone(loc, tableName, timeoutSec); err != nil {
+	return nil
+}
+
+func WaitForDeleteDone(loc, tableName string, timeoutSec int) error {
+	if err := WaitForOperationDone(loc, tableName, "delete", timeoutSec); err != nil {
+		return err
+	}
+	return nil
+}
+
+func WaitForUpdateAndInsertDone(loc, tableName string, timeoutSec int) error {
+	if err := WaitForOperationDone(loc, tableName, "update", timeoutSec); err != nil {
+		return err
+	}
+	if err := WaitForOperationDone(loc, tableName, "insert",timeoutSec); err != nil {
 		return err
 	}
 	return nil
@@ -907,10 +925,10 @@ func UpdateRowAndInsertDummyDataFromIDGoroutine(loc, tableName string, updateTot
 		start := time.Now()
 
 		for i := updatebeginID; i < updateTotal+updatebeginID; i++ {
-			// 更新 Name 欄位
+			// Update the Name field
 			err = db.Table("Accounts").Where("ID = ?", i).Update("Name", gorm.Expr("CONCAT(Name, ?)", " updated")).Error
 			if err != nil {
-				log.Errorf("Failed to insert '%d th' record: %v", i, err)
+				log.Errorf("failed to insert '%d th' record: %v", i, err)
 				opFailed++
 			}
 			state.Update.CurrentTotal++
@@ -978,7 +996,7 @@ func CleanUpTableGoroutine(loc, tableName string) error {
 		// Clean up
 		result := db.Exec(fmt.Sprintf("DELETE FROM %s", tableName))
 		if result.Error != nil {
-			log.Errorf("Failed to exec clean up '%s' table '%s': %v", loc, tableName, result.Error)
+			log.Errorf("failed to exec clean up '%s' table '%s': %v", loc, tableName, result.Error)
 			state.Delete.Done <- false
 			return
 		}
@@ -986,7 +1004,7 @@ func CleanUpTableGoroutine(loc, tableName string) error {
 		var rowCount int64
 		db.Table(tableName).Count(&rowCount)
 		if rowCount != 0 {
-			log.Errorf("Failed to clean up '%s' table '%s'", loc, tableName)
+			log.Errorf("failed to clean up '%s' table '%s'", loc, tableName)
 			state.Delete.Done <- false
 			return
 		}
@@ -995,26 +1013,12 @@ func CleanUpTableGoroutine(loc, tableName string) error {
 	return nil
 }
 
-func WaitForDeleteDone(loc, tableName string, timeoutSec int) error {
-	var retry int
-	for retry = 0; retry < timeoutSec; retry++ {
-		select {
-		case <-state.Delete.Done:
-			log.Infof("'%s' table '%s' delete done.. (%d sec)", loc, tableName, retry)
-			return nil
-		default:
-			log.Infof("Waiting for '%s' table '%s' delete done.. (%d sec)", loc, tableName, retry)
-			time.Sleep(1 * time.Second)
-		}
-	}
-	return fmt.Errorf("'%s' table '%s' delete done timeout", loc, tableName)
-}
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		state.WG.Wait()
 		if err := CloseAllServices(); err != nil {
-			log.Errorf("Failed to close all services: %v", err)
+			log.Errorf("failed to close all services: %v", err)
 		}
 		return ctx, nil
 	})
@@ -1028,19 +1032,19 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Given(`^Set up atomic flow document$`, InitAtomicService)
 
 	ctx.Then(`^"([^"]*)" table "([^"]*)" has "(\d+)" datas \(timeout "([^"]*)"\)$`, VerifyRowCountTimeoutSeconds)
-	ctx.Given(`^"([^"]*)" table "([^"]*)" added "([^"]*)" datas \(starting ID "(\d+)"\)$`, InsertDummyDataFromID)
-	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 開始持續新增 "([^"]*)" 筆 \(ID 開始編號 "(\d+)"\)$`, InsertDummyDataFromIDGoroutine)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" inserted "([^"]*)" datas \(starting ID "(\d+)"\)$`, InsertDummyDataFromID)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" continuously inserting "([^"]*)" datas \(starting ID "(\d+)"\)$`, InsertDummyDataFromIDGoroutine)
 	ctx.Then(`^"([^"]*)" has the same content as "([^"]*)" in "([^"]*)" \(timeout "([^"]*)"\)$`, VerifyFromToRowCountAndContentTimeoutSeconds)
 	ctx.Given(`^docker compose "([^"]*)" service "([^"]*)" \(in "([^"]*)"\)$`, DockerComposeServiceIn)
 	ctx.Then(`^container "([^"]*)" was "([^"]*)" \(timeout "(\d+)"\)$`, ContainerStateWasTimeoutSeconds)
 	ctx.When(`^container "([^"]*)" ready \(timeout "(\d+)"\)$`, ContainerAndProcessReadyTimeoutSeconds)
-	ctx.Then(`等待 "([^"]*)" 資料表 "([^"]*)" 新增完成 \(timeout "([^"]*)"\)$`, WaitForInsertionDone)
+	ctx.Then(`wait for "([^"]*)" table "([^"]*)" insertion to complete \(timeout "([^"]*)"\)$`, WaitForInsertionDone)
 	ctx.Then(`^Wait "([^"]*)" seconds$`, WaitSeconds)
 
 	ctx.Given(`^"([^"]*)" table "([^"]*)" updated "([^"]*)" datas - appending suffix 'updated' to each Name field \(starting ID "(\d+)"\)$`, UpdateRowDummyDataFromID)
-	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 開始持續更新 "([^"]*)" 筆 - 每筆 Name 的內容加上後綴 updated \(ID 開始編號 "(\d+)"\) 並新增 "([^"]*)" 筆 \(ID 開始編號 "(\d+)"\)$`, UpdateRowAndInsertDummyDataFromIDGoroutine)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" continuously updating "([^"]*)" datas - appending suffix 'updated' to each Name field \(starting ID "(\d+)"\) and inserting "([^"]*)" datas \(starting ID "(\d+)"\)$`, UpdateRowAndInsertDummyDataFromIDGoroutine)
 	ctx.Given(`^"([^"]*)" table "([^"]*)" cleared$`, CleanUpTable)
-	ctx.Then(`^等待 "([^"]*)" 資料表 "([^"]*)" 更新完成及新增完成 \(timeout "([^"]*)"\)$`, WaitForUpdateAndInsertDone)
-	ctx.Given(`^"([^"]*)" 資料表 "([^"]*)" 開始持續清空$`, CleanUpTableGoroutine)
-	ctx.Then(`^等待 "([^"]*)" 資料表 "([^"]*)" 清空完成 \(timeout "([^"]*)"\)$`, WaitForDeleteDone)
+	ctx.Then(`^wait for "([^"]*)" table "([^"]*)" update and insertion to complete \(timeout "([^"]*)"\)$`, WaitForUpdateAndInsertDone)
+	ctx.Given(`^"([^"]*)" table "([^"]*)" continuous cleanup$`, CleanUpTableGoroutine)
+	ctx.Then(`^wait for "([^"]*)" table "([^"]*)" cleanup to complete \(timeout "([^"]*)"\)$`, WaitForDeleteDone)
 }
