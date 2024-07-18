@@ -382,12 +382,11 @@ func VerifyRowCountTimeoutSeconds(loc, tableName string, expectedRowCount, timeo
 	var retry int
 	for retry = 0; retry < timeoutSec; retry++ {
 		db.Table(tableName).Count(&currRowCount)
-		if currRowCount == int64(expectedRowCount) {
-			log.Infof("Verify '%s' table '%s' has %d records..", loc, tableName, expectedRowCount)
-			return nil
-		}
 		log.Infof("Waiting for '%s' table '%s' to has %d records.. (%d sec), current total: %d",
 			loc, tableName, expectedRowCount, retry, currRowCount)
+		if currRowCount == int64(expectedRowCount) {
+			return nil
+		}
 		time.Sleep(1 * time.Second)
 	}
 
@@ -515,7 +514,7 @@ func GetCount(db *gorm.DB, tableName string) (int64, error) {
 	return count, err
 }
 
-func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, locFrom string, tableName string, timeoutSec int) error {
+func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, locFrom, tableName string, timeoutSec int) error {
 	// compare source/target table row count
 	sourceDB, err := GetDBInstance(locFrom)
 	if err != nil {
@@ -546,8 +545,8 @@ func VerifyFromToRowCountAndContentTimeoutSeconds(locTo, locFrom string, tableNa
 		time.Sleep(1 * time.Second)
 	}
 
-		if retry == timeoutSec {
-		return fmt.Errorf("Number of records in table '%s' is %d, expected %d after %d second",
+	if retry == timeoutSec {
+		return fmt.Errorf("number of records in table '%s' is %d, expected %d after %d second",
 			tableName, targetRowCount, srcRowCount, timeoutSec)
 	}
 
@@ -818,21 +817,6 @@ func ContainerAndProcessReadyTimeoutSeconds(ctName string, timeoutSec int) error
 	}
 }
 
-func WaitForInsertionDone(loc, tableName string, timeoutSec int) error {
-	var retry int
-	for retry = 0; retry < timeoutSec; retry++ {
-		select {
-		case <-state.Insertion.Done:
-			log.Infof("'%s' table '%s' insertion done.. (%d sec)", loc, tableName, retry)
-			return nil
-		default:
-			log.Infof("Waiting for '%s' table '%s' insertion done.. (%d sec), current total: %d", loc, tableName, retry, state.Insertion.CurrentTotal)
-			time.Sleep(1 * time.Second)
-		}
-	}
-	return fmt.Errorf("'%s' table '%s' insertion done timeout", loc, tableName)
-}
-
 func WaitSeconds(seconds int) error {
 	time.Sleep(time.Duration(seconds) * time.Second)
 	return nil
@@ -851,11 +835,6 @@ func WaitForInsertionDone(loc, tableName string, timeoutSec int) error {
 		}
 	}
 	return fmt.Errorf("'%s' table '%s' insertion done timeout", loc, tableName)
-}
-
-func WaitSeconds(seconds int) error {
-	time.Sleep(time.Duration(seconds) * time.Second)
-	return nil
 }
 
 func UpdateRowDummyDataFromID(loc, tableName string, total, beginID int) error {
@@ -878,32 +857,9 @@ func UpdateRowDummyDataFromID(loc, tableName string, total, beginID int) error {
 		}
 	}
 
-		elapsed := time.Since(start)
-		log.Infof("Updated total %d records to '%s' table '%s', ID '%d ~ %d', failed count %d (elapsed: %s)",
-			UpdateTotal, loc, tableName, UpdatebeginID, UpdatebeginID+UpdateTotal-1, opFailed, elapsed)
-		state.Update.Done <- true
-
-		start = time.Now()
-		for i := insertionBeginID; i < insertionTotal+insertionBeginID; i++ {
-			account := Account{
-				ID:    i,
-				Name:  fmt.Sprintf("Name %d", i),
-				Phone: fmt.Sprintf("Phone %d", i),
-			}
-			query := fmt.Sprintf("INSERT INTO %s (id, name, phone) VALUES (%d, '%s', '%s')",
-				tableName, account.ID, account.Name, account.Phone)
-			result := db.Exec(query)
-			if result.Error != nil {
-				log.Printf("Failed to insert '%d th' record: %v", i, result.Error)
-			}
-			state.Insertion.CurrentTotal++
-		}
-		elapsed = time.Since(start)
-		log.Infof("Inserted total %d records to '%s', ID '%d ~ %d' (elapsed: %s)",
-			insertionTotal, loc, insertionBeginID, insertionBeginID+insertionTotal-1, elapsed)
-
-		state.Insertion.Done <- true
-	}()
+	elapsed := time.Since(start)
+	log.Infof("Updated total %d records to '%s' table '%s', ID '%d ~ %d', failed count %d (elapsed: %s)",
+		total, loc, tableName, beginID, beginID+total-1, opFailed, elapsed)
 	return nil
 }
 
@@ -932,8 +888,8 @@ func WaitForUpdateAndInsertDone(loc, tableName string, timeoutSec int) error {
 	return nil
 }
 
-func UpdateRowAndInsertDummyDataFromIDGoroutine(loc, tableName string, UpdateTotal, UpdatebeginID, insertionTotal, insertionBeginID int) error {
-	InitUpdateState(UpdateTotal)
+func UpdateRowAndInsertDummyDataFromIDGoroutine(loc, tableName string, updateTotal, updatebeginID, insertionTotal, insertionBeginID int) error {
+	InitUpdateState(updateTotal)
 	InitInsertionState(insertionTotal)
 	state.WG.Add(1)
 	go func() {
@@ -945,12 +901,12 @@ func UpdateRowAndInsertDummyDataFromIDGoroutine(loc, tableName string, UpdateTot
 			return
 		}
 
-		log.Infof("Updating %d records to '%s' - '%s'", UpdateTotal, loc, tableName)
+		log.Infof("Updating %d records to '%s' - '%s'", updateTotal, loc, tableName)
 		// Update dummy data
 		opFailed := 0
 		start := time.Now()
 
-		for i := UpdatebeginID; i < UpdateTotal+UpdatebeginID; i++ {
+		for i := updatebeginID; i < updateTotal+updatebeginID; i++ {
 			// 更新 Name 欄位
 			err = db.Table("Accounts").Where("ID = ?", i).Update("Name", gorm.Expr("CONCAT(Name, ?)", " updated")).Error
 			if err != nil {
@@ -962,7 +918,7 @@ func UpdateRowAndInsertDummyDataFromIDGoroutine(loc, tableName string, UpdateTot
 
 		elapsed := time.Since(start)
 		log.Infof("Updated total %d records to '%s' table '%s', ID '%d ~ %d', failed count %d (elapsed: %s)",
-			UpdateTotal, loc, tableName, UpdatebeginID, UpdatebeginID+UpdateTotal-1, opFailed, elapsed)
+			updateTotal, loc, tableName, updatebeginID, updatebeginID+updateTotal-1, opFailed, elapsed)
 		state.Update.Done <- true
 
 		start = time.Now()
@@ -986,31 +942,6 @@ func UpdateRowAndInsertDummyDataFromIDGoroutine(loc, tableName string, UpdateTot
 
 		state.Insertion.Done <- true
 	}()
-	return nil
-}
-
-func WaitForUpdateDone(loc, tableName string, timeoutSec int) error {
-	var retry int
-	for retry = 0; retry < timeoutSec; retry++ {
-		select {
-		case <-state.Update.Done:
-			log.Infof("'%s' table '%s' update done.. (%d sec)", loc, tableName, retry)
-			return nil
-		default:
-			log.Infof("Waiting for '%s' table '%s' update done.. (%d sec), current total: %d", loc, tableName, retry, state.Update.CurrentTotal)
-			time.Sleep(1 * time.Second)
-		}
-	}
-	return fmt.Errorf("'%s' table '%s' update done timeout", loc, tableName)
-}
-
-func WaitForUpdateAndInsertDone(loc, tableName string, timeoutSec int) error {
-	if err := WaitForUpdateDone(loc, tableName, timeoutSec); err != nil {
-		return err
-	}
-	if err := WaitForInsertionDone(loc, tableName, timeoutSec); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -1087,7 +1018,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 		}
 		return ctx, nil
 	})
-
 
 	ctx.Given(`^Create all services$`, CreateServices)
 	ctx.Given(`^Close all services$`, CloseAllServices)
