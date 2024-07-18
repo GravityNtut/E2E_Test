@@ -1,5 +1,5 @@
 Feature: Gravity2 MSSQL to MySQL - Component restart while No data changes
-    Background: Set upsingle point of failure test
+    Background: Set up single point of failure test
         Given Create all services
         Given Load the initial configuration file
         Given Start the "source-mssql" service (timeout "60")
