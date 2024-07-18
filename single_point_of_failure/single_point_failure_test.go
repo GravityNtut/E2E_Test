@@ -73,7 +73,7 @@ const (
 	Adapter           = "gravity-adapter-mssql"
 	NatsJetstream     = "nats-jetstream"
 )
-+
+
 type SharedState struct {
 	Insertion insertionState
 	Update    updateState
@@ -900,7 +900,7 @@ func WaitForUpdateAndInsertDone(loc, tableName string, timeoutSec int) error {
 	if err := WaitForOperationDone(loc, tableName, "update", timeoutSec); err != nil {
 		return err
 	}
-	if err := WaitForOperationDone(loc, tableName, "insert",timeoutSec); err != nil {
+	if err := WaitForOperationDone(loc, tableName, "insert", timeoutSec); err != nil {
 		return err
 	}
 	return nil
@@ -1012,7 +1012,6 @@ func CleanUpTableGoroutine(loc, tableName string) error {
 	}()
 	return nil
 }
-
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
