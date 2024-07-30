@@ -1,5 +1,5 @@
 Feature: Gravity2 MSSQL to MySQL - Component restart while No data changes
-    Scenario: Single point of failure test
+    Background: Set up single point of failure test
         Given Create all services
         Given Load the initial configuration file
         Given Start the "source-mssql" service (timeout "60")
@@ -13,16 +13,16 @@ Feature: Gravity2 MSSQL to MySQL - Component restart while No data changes
         Given Start the "atomic" service (timeout "60")
         Given Start the "gravity-adapter-mssql" service (timeout "60")
         
-    Scenario: After synchronizing changes, restart the component, wait for it ready, then add, update, or delete data
+    Scenario Outline: After synchronizing changes, restart the component, wait for it ready, then add, update, or delete data
         Then "source-mssql" table "Accounts" has "0" datas (timeout "3")
-        Given "source-mssql" table "Accounts" added "1000" datas (starting ID "1")
+        Given "source-mssql" table "Accounts" inserted "1000" datas (starting ID "1")
         Then "target-mysql" has the same content as "source-mssql" in "Accounts" (timeout "90")
         Given docker compose "stop" service "<RestartService>" (in "foreground")
         Then container "<RestartService>" was "exited" (timeout "120")
         Given docker compose "start" service "<RestartService>" (in "foreground")
         When container "<RestartService>" ready (timeout "120")
         Given "source-mssql" table "Accounts" updated "1000" datas - appending suffix 'updated' to each Name field (starting ID "1")
-        Given "source-mssql" table "Accounts" added "1000" datas (starting ID "1001")
+        Given "source-mssql" table "Accounts" inserted "1000" datas (starting ID "1001")
         Then "target-mysql" has the same content as "source-mssql" in "Accounts" (timeout "90")
         Given "source-mssql" table "Accounts" cleared
         Then "target-mysql" table "Accounts" has "0" datas (timeout "120")
@@ -36,5 +36,3 @@ Feature: Gravity2 MSSQL to MySQL - Component restart while No data changes
             | source-mssql          |
             | target-mysql          |
 
-    Scenario: Clear the test environment
-        Given Close all services
