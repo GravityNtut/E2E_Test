@@ -33,7 +33,7 @@
         "initialLoad": false,
         "delivery": "all",
         "startseq": "",
-        "manuallyAck": false,
+        "manuallyAck": true,
         "x": 150,
         "y": 200,
         "wires": [
@@ -128,7 +128,8 @@
         "y": 240,
         "wires": [
             [
-                "6c270008.fb054"
+                "6c270008.fb054",
+                "31dafe48.1e16a2"
             ]
         ]
     },
@@ -258,5 +259,14 @@
                 "44aaf5e8.54d1ec"
             ]
         ]
+    },
+    {
+        "id": "31dafe48.1e16a2",
+        "type": "Gravity Acknowledge",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "x": 1040,
+        "y": 320,
+        "wires": []
     }
 ]
