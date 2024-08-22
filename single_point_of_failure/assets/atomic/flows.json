@@ -33,13 +33,14 @@
         "initialLoad": false,
         "delivery": "all",
         "startseq": "",
-        "manuallyAck": false,
+        "manuallyAck": true,
         "x": 150,
         "y": 200,
         "wires": [
             [
                 "b355b226.d5d01",
-                "84b3f958.f77dc8"
+                "84b3f958.f77dc8",
+                "f97309f.88c4ef8"
             ]
         ]
     },
@@ -128,7 +129,8 @@
         "y": 240,
         "wires": [
             [
-                "6c270008.fb054"
+                "6c270008.fb054",
+                "31dafe48.1e16a2"
             ]
         ]
     },
@@ -257,6 +259,31 @@
             [
                 "44aaf5e8.54d1ec"
             ]
+        ]
+    },
+    {
+        "id": "31dafe48.1e16a2",
+        "type": "Gravity Acknowledge",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "x": 1040,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "f97309f.88c4ef8",
+        "type": "file",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "filename": "/data/atomic/log.txt",
+        "appendNewline": true,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 390,
+        "y": 60,
+        "wires": [
+            []
         ]
     }
 ]

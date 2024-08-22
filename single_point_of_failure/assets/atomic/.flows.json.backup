@@ -33,7 +33,7 @@
         "initialLoad": false,
         "delivery": "all",
         "startseq": "",
-        "manuallyAck": false,
+        "manuallyAck": true,
         "x": 150,
         "y": 200,
         "wires": [
@@ -128,7 +128,8 @@
         "y": 240,
         "wires": [
             [
-                "6c270008.fb054"
+                "6c270008.fb054",
+                "31dafe48.1e16a2"
             ]
         ]
     },
@@ -219,57 +220,6 @@
         ]
     },
     {
-        "id": "b0137.e5133ec9",
-        "type": "file",
-        "z": "e468ad01.32b03",
-        "name": "create_event_log2file",
-        "filename": "/e2e_status/dispatcher_create_event.log",
-        "appendNewline": true,
-        "createDir": false,
-        "overwriteFile": "false",
-        "encoding": "utf8",
-        "x": 600,
-        "y": 140,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "47c1a38d.c61e9c",
-        "type": "function",
-        "z": "e468ad01.32b03",
-        "name": "refind playload",
-        "func": "m = {'topic': msg.topic};\nreturn {payload: m};",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 820,
-        "y": 160,
-        "wires": [
-            [
-                "b08599ee.edaba8"
-            ]
-        ]
-    },
-    {
-        "id": "b08599ee.edaba8",
-        "type": "file",
-        "z": "e468ad01.32b03",
-        "name": "create_topic_log2file",
-        "filename": "/e2e_status/mysql_insert_topic.log",
-        "appendNewline": true,
-        "createDir": false,
-        "overwriteFile": "false",
-        "encoding": "utf8",
-        "x": 1040,
-        "y": 160,
-        "wires": [
-            []
-        ]
-    },
-    {
         "id": "6e242133.529d9",
         "type": "change",
         "z": "e468ad01.32b03",
@@ -309,5 +259,14 @@
                 "44aaf5e8.54d1ec"
             ]
         ]
+    },
+    {
+        "id": "31dafe48.1e16a2",
+        "type": "Gravity Acknowledge",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "x": 1040,
+        "y": 320,
+        "wires": []
     }
 ]

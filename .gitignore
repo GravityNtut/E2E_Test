@@ -28,3 +28,4 @@ gravity-cli
 
 **/tmp/*
 !**/tmp/.gitkeep
+log.txt

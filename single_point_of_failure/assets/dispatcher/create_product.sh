@@ -16,6 +16,7 @@ fi
     --event=accountCreated --method=create \
     --handler=/assets/dispatcher/handler_test.js \
     --schema=/assets/dispatcher/schema_test.json \
+    --pk="id" \
     -s "${GRAVITY_DISPATCHER_GRAVITY_HOST}:${GRAVITY_DISPATCHER_GRAVITY_PORT}"
 if [ $? -ne 0 ]; then
     echo "@@ Failed to create product ruleset 'accountCreated' !!!"
@@ -29,6 +30,7 @@ fi
     --event=accountUpdated --method=update \
     --handler=/assets/dispatcher/handler_test.js \
     --schema=/assets/dispatcher/schema_test.json \
+    --pk="id" \
     -s "${GRAVITY_DISPATCHER_GRAVITY_HOST}:${GRAVITY_DISPATCHER_GRAVITY_PORT}"
 if [ $? -ne 0 ]; then
     echo "@@ Failed to create product ruleset 'accountUpdated' !!!"
@@ -42,6 +44,7 @@ fi
     --event=accountDeleted --method=delete \
     --handler=/assets/dispatcher/handler_test.js \
     --schema=/assets/dispatcher/schema_test.json \
+    --pk="id" \
     -s "${GRAVITY_DISPATCHER_GRAVITY_HOST}:${GRAVITY_DISPATCHER_GRAVITY_PORT}"
 if [ $? -ne 0 ]; then
     echo "@@ Failed to create product ruleset 'accountDeleted' !!!"
