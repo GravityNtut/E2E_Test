@@ -39,7 +39,8 @@
         "wires": [
             [
                 "b355b226.d5d01",
-                "84b3f958.f77dc8"
+                "84b3f958.f77dc8",
+                "f97309f.88c4ef8"
             ]
         ]
     },
@@ -268,5 +269,21 @@
         "x": 1040,
         "y": 320,
         "wires": []
+    },
+    {
+        "id": "f97309f.88c4ef8",
+        "type": "file",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "filename": "/data/atomic/log.txt",
+        "appendNewline": true,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 390,
+        "y": 60,
+        "wires": [
+            []
+        ]
     }
 ]
