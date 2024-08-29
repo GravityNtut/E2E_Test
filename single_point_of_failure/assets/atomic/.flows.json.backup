@@ -314,7 +314,8 @@
         "y": 120,
         "wires": [
             [
-                "1546f1e8.b923ae"
+                "1546f1e8.b923ae",
+                "44aaf5e8.54d1ec"
             ]
         ]
     },
@@ -455,8 +456,8 @@
         "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 200,
-        "y": 360,
+        "x": 420,
+        "y": 400,
         "wires": []
     },
     {
@@ -501,22 +502,5 @@
         "x": 1090,
         "y": 320,
         "wires": []
-    },
-    {
-        "id": "b3a5da96.df4688",
-        "type": "catch",
-        "z": "e468ad01.32b03",
-        "name": "",
-        "scope": [
-            "44aaf5e8.54d1ec"
-        ],
-        "uncaught": false,
-        "x": 720,
-        "y": 420,
-        "wires": [
-            [
-                "44aaf5e8.54d1ec"
-            ]
-        ]
     }
 ]
