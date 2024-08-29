@@ -39,7 +39,8 @@
         "wires": [
             [
                 "b355b226.d5d01",
-                "84b3f958.f77dc8"
+                "84b3f958.f77dc8",
+                "f97309f.88c4ef8"
             ]
         ]
     },
@@ -48,7 +49,7 @@
         "type": "debug",
         "z": "e468ad01.32b03",
         "name": "subscribe log",
-        "active": true,
+        "active": false,
         "tosidebar": true,
         "console": true,
         "tostatus": false,
@@ -129,7 +130,7 @@
         "wires": [
             [
                 "6c270008.fb054",
-                "31dafe48.1e16a2"
+                "37437a32.2134a6"
             ]
         ]
     },
@@ -261,11 +262,244 @@
         ]
     },
     {
-        "id": "31dafe48.1e16a2",
+        "id": "f97309f.88c4ef8",
+        "type": "file",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "filename": "/data/atomic/log.txt",
+        "appendNewline": true,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 390,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b541eb07.3075d8",
+        "type": "catch",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "scope": [
+            "44aaf5e8.54d1ec"
+        ],
+        "uncaught": false,
+        "x": 690,
+        "y": 120,
+        "wires": [
+            [
+                "ff004256.2f98c",
+                "988412fa.59d17"
+            ]
+        ]
+    },
+    {
+        "id": "988412fa.59d17",
+        "type": "delay",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "2",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "x": 880,
+        "y": 120,
+        "wires": [
+            [
+                "1546f1e8.b923ae",
+                "44aaf5e8.54d1ec"
+            ]
+        ]
+    },
+    {
+        "id": "b6943eee.cebfd",
+        "type": "switch",
+        "z": "e468ad01.32b03",
+        "name": "error_skip",
+        "property": "error.message",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "regex",
+                "v": "^Error: Duplicate entry.*",
+                "vt": "str",
+                "case": false
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 260,
+        "y": 420,
+        "wires": [
+            [
+                "768fd7a7.bc83d8"
+            ],
+            [
+                "f897fa82.7e7928"
+            ]
+        ]
+    },
+    {
+        "id": "d896ccfe.479f7",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "error_timeout",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 550,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "f897fa82.7e7928",
+        "type": "change",
+        "z": "e468ad01.32b03",
+        "name": "set_counter",
+        "rules": [
+            {
+                "t": "set",
+                "p": "counter",
+                "pt": "global",
+                "to": "$globalContext(\"counter\") +1\t",
+                "tot": "jsonata"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 250,
+        "y": 480,
+        "wires": [
+            [
+                "95a33bd8.7080c8"
+            ]
+        ]
+    },
+    {
+        "id": "95a33bd8.7080c8",
+        "type": "switch",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "property": "$globalContext(\"counter\")\t",
+        "propertyType": "jsonata",
+        "rules": [
+            {
+                "t": "lte",
+                "v": "3",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 250,
+        "y": 540,
+        "wires": [
+            [],
+            [
+                "2d2c04be.9b86ec"
+            ]
+        ]
+    },
+    {
+        "id": "2d2c04be.9b86ec",
+        "type": "function",
+        "z": "e468ad01.32b03",
+        "name": "reset",
+        "func": "global.set(\"counter\",0);\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "// 部署節點後，此處的程式碼將運行一次。 \nglobal.set(\"counter\",0);",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 540,
+        "wires": [
+            [
+                "d896ccfe.479f7"
+            ]
+        ]
+    },
+    {
+        "id": "768fd7a7.bc83d8",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "error_skip",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 420,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "ff004256.2f98c",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "error_msg",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 890,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "1546f1e8.b923ae",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "error_retry",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1090,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "37437a32.2134a6",
         "type": "Gravity Acknowledge",
         "z": "e468ad01.32b03",
         "name": "",
-        "x": 1040,
+        "x": 1090,
         "y": 320,
         "wires": []
     }

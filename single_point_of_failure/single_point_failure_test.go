@@ -850,18 +850,18 @@ func UpdateRowDummyDataFromID(loc, tableName string, total, beginID int) error {
 
 func WaitForOperationDone(loc, tableName, op string, timeoutSec int) error {
 	var doneChan chan bool
-	var currentTotal int
+	var currentTotal *int
 
 	switch op {
 	case "insert":
 		doneChan = state.Insertion.Done
-		currentTotal = state.Insertion.CurrentTotal
+		currentTotal = &state.Insertion.CurrentTotal
 	case "update":
 		doneChan = state.Update.Done
-		currentTotal = state.Update.CurrentTotal
+		currentTotal = &state.Update.CurrentTotal
 	case "delete":
 		doneChan = state.Delete.Done
-		currentTotal = 0
+		currentTotal = nil
 	default:
 		return fmt.Errorf("invalid operation '%s'", op)
 	}
@@ -875,7 +875,7 @@ func WaitForOperationDone(loc, tableName, op string, timeoutSec int) error {
 			log.Infof("'%s' table '%s' %s done.. (%d sec)", loc, tableName, op, retry)
 			return nil
 		default:
-			log.Infof("Waiting for '%s' table '%s' %s done.. (%d sec), current total: %d", loc, tableName, op, retry, currentTotal)
+			log.Infof("Waiting for '%s' table '%s' %s done.. (%d sec), current total: %d", loc, tableName, op, retry, *currentTotal)
 			time.Sleep(1 * time.Second)
 		}
 	}
