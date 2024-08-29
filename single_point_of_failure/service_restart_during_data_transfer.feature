@@ -23,6 +23,7 @@ Feature: Gravity2 MSSQL to MySQL - Service restart during data transfer
         When container "<RestartService>" ready (timeout "120")
         Then wait for "source-mssql" table "Accounts" insertion to complete (timeout "120")
         And "target-mysql" has the same content as "source-mssql" in "Accounts" (timeout "90")
+        
         Given "source-mssql" table "Accounts" continuously updating "3000" datas - appending suffix 'updated' to each Name field (starting ID "1") and inserting "1000" datas (starting ID "3001")
         Given docker compose "stop" service "<RestartService>" (in "foreground")
         Then container "<RestartService>" was "exited" (timeout "120")
@@ -31,6 +32,7 @@ Feature: Gravity2 MSSQL to MySQL - Service restart during data transfer
         When container "<RestartService>" ready (timeout "120")
         Then wait for "source-mssql" table "Accounts" update and insertion to complete (timeout "120")
         And "target-mysql" has the same content as "source-mssql" in "Accounts" (timeout "90")
+
         Given "source-mssql" table "Accounts" continuous cleanup
         Given docker compose "stop" service "<RestartService>" (in "foreground")
         Then container "<RestartService>" was "exited" (timeout "120")
