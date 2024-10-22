@@ -1,0 +1,364 @@
+[
+    {
+        "id": "e468ad01.32b03",
+        "type": "tab",
+        "label": "流程1",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "a83ef9a5.5813e8",
+        "type": "Gravity Server",
+        "server": "nats-jetstream",
+        "port": "32803"
+    },
+    {
+        "id": "f77c32e.91932d",
+        "type": "MySQLdatabase",
+        "name": "target-mysql",
+        "host": "target-mysql",
+        "port": "3306",
+        "db": "TargetTestDB",
+        "tz": "",
+        "charset": "UTF8"
+    },
+    {
+        "id": "72ba2fda.78c71",
+        "type": "Gravity Subscriber",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "server": "a83ef9a5.5813e8",
+        "domain": "default",
+        "product": "products",
+        "initialLoad": false,
+        "delivery": "all",
+        "startseq": "",
+        "manuallyAck": true,
+        "x": 150,
+        "y": 200,
+        "wires": [
+            [
+                "b355b226.d5d01",
+                "f97309f.88c4ef8"
+            ]
+        ]
+    },
+    {
+        "id": "b355b226.d5d01",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "subscribe log",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 390,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "db411035.82991",
+        "type": "change",
+        "z": "e468ad01.32b03",
+        "name": "setSQL_insert",
+        "rules": [
+            {
+                "t": "move",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payloadBak",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "{}",
+                "tot": "jsonata"
+            },
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "\"INSERT INTO Accounts (id,name,phone) VALUES (\"&payloadBak.record.id&\",'\"&payloadBak.record.name&\"','\"&payloadBak.record.phone&\"');\"\t",
+                "tot": "jsonata"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 580,
+        "y": 200,
+        "wires": [
+            [
+                "44aaf5e8.54d1ec"
+            ]
+        ]
+    },
+    {
+        "id": "6c270008.fb054",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "mysql-result",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1030,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "44aaf5e8.54d1ec",
+        "type": "mysql",
+        "z": "e468ad01.32b03",
+        "mydb": "f77c32e.91932d",
+        "name": "",
+        "x": 830,
+        "y": 240,
+        "wires": [
+            [
+                "6c270008.fb054",
+                "37437a32.2134a6"
+            ]
+        ]
+    },
+    {
+        "id": "84b3f958.f77dc8",
+        "type": "switch",
+        "z": "e468ad01.32b03",
+        "name": "EventCheck",
+        "property": "payload.eventName",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "accountCreated",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "accountDeleted",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "accountUpdated",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 4,
+        "x": 350,
+        "y": 240,
+        "wires": [
+            [
+                "db411035.82991"
+            ],
+            [
+                "1a35d1b5.3f446e"
+            ],
+            [
+                "6e242133.529d9"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "1a35d1b5.3f446e",
+        "type": "change",
+        "z": "e468ad01.32b03",
+        "name": "setSQL_delete",
+        "rules": [
+            {
+                "t": "move",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payloadBak",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "{}",
+                "tot": "jsonata"
+            },
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "\"delete from Accounts WHERE id = \"&payloadBak.record.id&\";\"\t",
+                "tot": "jsonata"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 580,
+        "y": 260,
+        "wires": [
+            [
+                "44aaf5e8.54d1ec"
+            ]
+        ]
+    },
+    {
+        "id": "6e242133.529d9",
+        "type": "change",
+        "z": "e468ad01.32b03",
+        "name": "setSQL_update",
+        "rules": [
+            {
+                "t": "move",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payloadBak",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "{}",
+                "tot": "jsonata"
+            },
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "\"Update Accounts SET name='\"&payloadBak.record.name&\"', phone='\"&payloadBak.record.phone&\"' WHERE id=\"&payloadBak.record.id&\";\"",
+                "tot": "jsonata"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 580,
+        "y": 320,
+        "wires": [
+            [
+                "44aaf5e8.54d1ec"
+            ]
+        ]
+    },
+    {
+        "id": "f97309f.88c4ef8",
+        "type": "file",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "filename": "/data/atomic/log.txt",
+        "appendNewline": true,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 390,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b541eb07.3075d8",
+        "type": "catch",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "scope": [
+            "44aaf5e8.54d1ec"
+        ],
+        "uncaught": false,
+        "x": 690,
+        "y": 120,
+        "wires": [
+            [
+                "ff004256.2f98c",
+                "988412fa.59d17"
+            ]
+        ]
+    },
+    {
+        "id": "988412fa.59d17",
+        "type": "delay",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "2",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "x": 880,
+        "y": 120,
+        "wires": [
+            [
+                "1546f1e8.b923ae",
+                "44aaf5e8.54d1ec"
+            ]
+        ]
+    },
+    {
+        "id": "ff004256.2f98c",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "error_msg",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 890,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "1546f1e8.b923ae",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "error_retry",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1090,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "37437a32.2134a6",
+        "type": "Gravity Acknowledge",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "x": 1090,
+        "y": 320,
+        "wires": []
+    }
+]
