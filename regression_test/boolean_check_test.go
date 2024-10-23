@@ -61,6 +61,17 @@ type JSONData struct {
 	Payload string `json:"payload"`
 }
 
+type Products struct {
+	ID       int
+	Name     string
+	Price    float64
+	Stock    int
+	Obsolete bool
+	ModTime  time.Time
+}
+
+var product Products
+
 var Cmd *exec.Cmd
 
 const (
@@ -511,7 +522,31 @@ func Base64ToString(base64Str string) (string, error) {
 	return string(decodedBytes), nil
 }
 
-func CheckSubResult() error {
+// func CheckSourceDBData() error {
+func CheckDBData(loc string) error {
+	db, err := GetDBInstance(loc)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(5 * time.Second)
+	// TODO: 改寫成用loop每秒抓取狀態
+	// var count int64
+	// db.Table("Products").Count(&count)
+	// fmt.Printf("count: %d", count)
+	err = db.Table("Products").First(&product).Error
+	if err != nil {
+		return fmt.Errorf("failed to query Products table: %v", err)
+	}
+
+	if product.Obsolete {
+		return fmt.Errorf("DP in " + loc + " Obsolete is true")
+	}
+
+	return nil
+}
+
+func CheckNatsStreamResult() error {
 	nc, _ := nats.Connect("nats://127.0.0.1:32803")
 	defer nc.Close()
 
@@ -559,6 +594,16 @@ func CheckSubResult() error {
 	}
 }
 
+// func CheckSubResult() error {
+// 	cmd := exec.Command("./gravity-cli", "-s", "127.0.0.1:32803", "product", "sub", "products")
+// 	err := cmd.Run()
+// 	if err != nil {
+// 		return fmt.Errorf("failed to execute gravity-cli sub: %v", err)
+// 	}
+
+// 	return nil
+// }
+
 func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
 		// if err := CloseAllServices(); err != nil {
@@ -570,10 +615,14 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Given(`^Create all services$`, CreateServices)
 	ctx.Given(`^Load the initial configuration file$`, LoadConfig)
 	ctx.Given(`^Start the "([^"]*)" service \(timeout "(\d+)"\)$`, DockerComposeServiceStart)
-	ctx.Given(`^Initialize the "([^"]*)" table Accounts$`, DBServerInit)
-	ctx.Given(`^Create Data Product Accounts$`, CreateDataProduct)
+	ctx.Given(`^Initialize the "([^"]*)" table Products$`, DBServerInit)
+	ctx.Given(`^Create Data Product Products$`, CreateDataProduct)
 	ctx.Given(`^Set up atomic flow document$`, InitAtomicService)
 
 	ctx.Given(`^"([^"]*)" table "([^"]*)" inserted a record which has false boolean value$`, InsertARecord)
-	ctx.Then(`^Check the subscribe command has a record with false value$`, CheckSubResult)
+	ctx.Then(`^Check the "([^"]*)" table Products has a record with false value$`, CheckDBData)
+	ctx.Then(`^Check the nats stream default domain has a record with false value$`, CheckNatsStreamResult)
+	// TODO:
+	// ctx.Then(`^Check the subscribe product command has a record with false value$`, CheckSubResult)
+	ctx.Then(`^Check the "([^"]*)" table Products has a record with false value$`, CheckDBData)
 }

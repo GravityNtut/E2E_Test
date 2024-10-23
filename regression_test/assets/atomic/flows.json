@@ -39,7 +39,8 @@
         "wires": [
             [
                 "b355b226.d5d01",
-                "f97309f.88c4ef8"
+                "f97309f.88c4ef8",
+                "84b3f958.f77dc8"
             ]
         ]
     },
@@ -84,7 +85,7 @@
                 "t": "set",
                 "p": "topic",
                 "pt": "msg",
-                "to": "\"INSERT INTO Accounts (id,name,phone) VALUES (\"&payloadBak.record.id&\",'\"&payloadBak.record.name&\"','\"&payloadBak.record.phone&\"');\"\t",
+                "to": "\"INSERT INTO Products (Id,Name,Price,Stock,Obsolete) VALUES ('\"&payloadBak.record.Id&\"','\"&payloadBak.record.Name&\"','\"&payloadBak.record.Price&\"','\"&payloadBak.record.Stock&\"',\"&payloadBak.record.Obsolete&\");\"\t",
                 "tot": "jsonata"
             }
         ],
@@ -97,7 +98,8 @@
         "y": 200,
         "wires": [
             [
-                "44aaf5e8.54d1ec"
+                "44aaf5e8.54d1ec",
+                "21218418.744f6c"
             ]
         ]
     },
@@ -143,7 +145,7 @@
         "rules": [
             {
                 "t": "eq",
-                "v": "accountCreated",
+                "v": "productCreated",
                 "vt": "str"
             },
             {
@@ -169,12 +171,8 @@
             [
                 "db411035.82991"
             ],
-            [
-                "1a35d1b5.3f446e"
-            ],
-            [
-                "6e242133.529d9"
-            ],
+            [],
+            [],
             []
         ]
     },
@@ -214,9 +212,7 @@
         "x": 580,
         "y": 260,
         "wires": [
-            [
-                "44aaf5e8.54d1ec"
-            ]
+            []
         ]
     },
     {
@@ -255,9 +251,7 @@
         "x": 580,
         "y": 320,
         "wires": [
-            [
-                "44aaf5e8.54d1ec"
-            ]
+            []
         ]
     },
     {
@@ -323,7 +317,7 @@
         "type": "debug",
         "z": "e468ad01.32b03",
         "name": "error_msg",
-        "active": true,
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -340,7 +334,7 @@
         "type": "debug",
         "z": "e468ad01.32b03",
         "name": "error_retry",
-        "active": true,
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -359,6 +353,22 @@
         "name": "",
         "x": 1090,
         "y": 320,
+        "wires": []
+    },
+    {
+        "id": "21218418.744f6c",
+        "type": "debug",
+        "z": "e468ad01.32b03",
+        "name": "",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 820,
+        "y": 380,
         "wires": []
     }
 ]
