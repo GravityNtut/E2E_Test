@@ -17,5 +17,5 @@ Feature: Gravity2 MSSQL to MySQL - Service restart during data transfer
         Given "source-mssql" table "Products" inserted a record which has false boolean value
         Then Check the "source-mssql" table Products has a record with false value
         Then Check the nats stream default domain has a record with false value
-        # Then Check the subscribe command has a record with false value
+        Then Check the subscribe sdk result has a record with false value
         Then Check the "target-mysql" table Products has a record with false value

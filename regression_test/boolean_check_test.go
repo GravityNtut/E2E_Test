@@ -15,7 +15,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BrobridgeOrg/gravity-sdk/v2/core"
+	subscriber_sdk "github.com/BrobridgeOrg/gravity-sdk/v2/subscriber"
+	gravity_sdk_types_product_event "github.com/BrobridgeOrg/gravity-sdk/v2/types/product_event"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/cucumber/godog"
 	"github.com/docker/docker/api/types"
@@ -522,25 +526,35 @@ func Base64ToString(base64Str string) (string, error) {
 	return string(decodedBytes), nil
 }
 
-// func CheckSourceDBData() error {
 func CheckDBData(loc string) error {
 	db, err := GetDBInstance(loc)
 	if err != nil {
 		return err
 	}
 
-	time.Sleep(5 * time.Second)
-	// TODO: 改寫成用loop每秒抓取狀態
-	// var count int64
-	// db.Table("Products").Count(&count)
-	// fmt.Printf("count: %d", count)
+	timeout := 10
+	timeoutState := true
+	for i := 0; i < timeout; i++ {
+		time.Sleep(1 * time.Second)
+		var count int64
+		db.Table("Products").Count(&count)
+		if count != 0 {
+			timeoutState = false
+			break
+		}
+	}
+
+	if timeoutState {
+		return fmt.Errorf("get " + loc + " data timeout")
+	}
+
 	err = db.Table("Products").First(&product).Error
 	if err != nil {
 		return fmt.Errorf("failed to query Products table: %v", err)
 	}
 
 	if product.Obsolete {
-		return fmt.Errorf("DP in " + loc + " Obsolete is true")
+		return fmt.Errorf("data in " + loc + " Obsolete is true")
 	}
 
 	return nil
@@ -594,21 +608,60 @@ func CheckNatsStreamResult() error {
 	}
 }
 
-// func CheckSubResult() error {
-// 	cmd := exec.Command("./gravity-cli", "-s", "127.0.0.1:32803", "product", "sub", "products")
-// 	err := cmd.Run()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to execute gravity-cli sub: %v", err)
-// 	}
+func GetSubscribeResult(client *core.Client) map[string]interface{} {
+	// Create adapter connector
+	acOpts := subscriber_sdk.NewOptions()
+	acOpts.Domain = "default"
+	acOpts.Verbose = true
+	s := subscriber_sdk.NewSubscriberWithClient("", client, acOpts)
+	// Subscribe to specific data product
+	var result map[string]interface{}
+	sub, err := s.Subscribe("products", func(msg *nats.Msg) {
+		var pe gravity_sdk_types_product_event.ProductEvent
+		err := proto.Unmarshal(msg.Data, &pe)
+		if err != nil {
+			fmt.Printf("Failed to parsing product event: %v", err)
+			msg.Ack()
+			return
+		}
 
-// 	return nil
-// }
+		r, err := pe.GetContent()
+		if err != nil {
+			fmt.Printf("Failed to parsing content: %v", err)
+			msg.Ack()
+			return
+		}
+		result = r.AsMap()
+
+		msg.Ack()
+	}, subscriber_sdk.Partition(-1), subscriber_sdk.StartSequence(1))
+	if err != nil {
+		panic(err)
+	}
+	time.Sleep(5 * time.Second)
+	sub.Close()
+	return result
+}
+
+func CheckSubResult() error {
+	client := core.NewClient()
+	options := core.NewOptions()
+	client.Connect("127.0.0.1:32803", options)
+	obsolete := GetSubscribeResult(client)["Obsolete"]
+
+	if obsolete != 0 {
+		return fmt.Errorf("Obsolete get by sub sdk is true")
+	} else {
+		fmt.Printf("obsolete: %t\n", obsolete)
+		return nil
+	}
+}
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
-		// if err := CloseAllServices(); err != nil {
-		// 	log.Errorf("failed to close all services: %v", err)
-		// }
+		if err := CloseAllServices(); err != nil {
+			log.Errorf("failed to close all services: %v", err)
+		}
 		return ctx, nil
 	})
 
@@ -622,7 +675,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Given(`^"([^"]*)" table "([^"]*)" inserted a record which has false boolean value$`, InsertARecord)
 	ctx.Then(`^Check the "([^"]*)" table Products has a record with false value$`, CheckDBData)
 	ctx.Then(`^Check the nats stream default domain has a record with false value$`, CheckNatsStreamResult)
-	// TODO:
-	// ctx.Then(`^Check the subscribe product command has a record with false value$`, CheckSubResult)
+	ctx.Then(`^Check the subscribe sdk result has a record with false value$`, CheckSubResult)
 	ctx.Then(`^Check the "([^"]*)" table Products has a record with false value$`, CheckDBData)
 }
