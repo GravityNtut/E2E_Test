@@ -49,6 +49,7 @@ func TestFeatures(t *testing.T) {
 var config struct {
 	SourceDB serverInfo `json:"source-mssql"`
 	TargetDB serverInfo `json:"target-mysql"`
+	Nats     serverInfo `json:"nats"`
 }
 
 type serverInfo struct {
@@ -156,7 +157,7 @@ func CreateTestDB(dialector gorm.Dialector, createTestDBFilePath string) error {
 	return nil
 }
 
-func InitAccountTable(s *serverInfo, createTableFilePath string) error {
+func InitProductsTable(s *serverInfo, createTableFilePath string) error {
 	var err error
 	sourceDB, err := ConnectToDB(s)
 	if err != nil {
@@ -212,14 +213,13 @@ func DBServerInit(dbStr string) error {
 	if err := CreateTestDB(dialector, createTestDBFilePath); err != nil {
 		return err
 	}
-	if err := InitAccountTable(serverInfo, createTableFilePath); err != nil {
+	if err := InitProductsTable(serverInfo, createTableFilePath); err != nil {
 		return err
 	}
 	return nil
 }
 
 func ContainerAndProcessReadyTimeoutSeconds(ctName string, timeoutSec int) error {
-	//wait gravity-adapter-mssql process ready, timeout 60s
 	switch ctName {
 	case Atomic:
 		return ContainerLifeCheck(ctName, "node-red", timeoutSec)
@@ -298,7 +298,7 @@ func DatabaseLifeCheck(dialector gorm.Dialector, timeout int) (*gorm.DB, error) 
 
 func NatsLifeCheck(timeout int) (*nats.Conn, error) {
 	for i := 0; i < timeout; i++ {
-		nc, err := nats.Connect("nats://127.0.0.1:32803")
+		nc, err := nats.Connect(fmt.Sprintf("nats://%s:%d", config.Nats.Host, config.Nats.Port))
 		if err != nil {
 			log.Infoln("Unable to connect to the NATS server. Retry after 1 second")
 			time.Sleep(1 * time.Second)
@@ -327,7 +327,7 @@ func CheckProcessRunningInContainer(containerName, processName string) error {
 				return err
 			}
 			for _, processInfo := range processes.Processes {
-				cmdLine := processInfo[7] // In the output of top, the 8th column represents the command line of the process being executed
+				cmdLine := processInfo[7]
 				if cmdLine == "/"+processName || cmdLine == processName {
 					return nil
 				}
@@ -366,7 +366,7 @@ func ContainerLifeCheck(ctName, psName string, timeout int) error {
 }
 
 func CreateDataProduct() error {
-	nc, err := nats.Connect("nats://127.0.0.1:32803")
+	nc, err := nats.Connect(fmt.Sprintf("nats://%s:%d", config.Nats.Host, config.Nats.Port))
 	if err != nil {
 		return err
 	}
@@ -545,7 +545,7 @@ func CheckDBData(loc string) error {
 	}
 
 	if timeoutState {
-		return fmt.Errorf("get " + loc + " data timeout")
+		return fmt.Errorf("get %s data timeout", loc)
 	}
 
 	err = db.Table("Products").First(&product).Error
@@ -554,14 +554,14 @@ func CheckDBData(loc string) error {
 	}
 
 	if product.Obsolete {
-		return fmt.Errorf("data in " + loc + " Obsolete is true")
+		return fmt.Errorf("data in %s Obsolete is true", loc)
 	}
 
 	return nil
 }
 
 func CheckNatsStreamResult() error {
-	nc, _ := nats.Connect("nats://127.0.0.1:32803")
+	nc, _ := nats.Connect(fmt.Sprintf("nats://%s:%d", config.Nats.Host, config.Nats.Port))
 	defer nc.Close()
 
 	js, err := nc.JetStream()
@@ -597,64 +597,88 @@ func CheckNatsStreamResult() error {
 		return fmt.Errorf("json unmarshal failed: %v", err)
 	}
 
-	if obsolete, ok := result["Obsolete"].(bool); ok {
-		if obsolete {
-			return fmt.Errorf("Obsolete is true")
-		} else {
-			return nil
-		}
-	} else {
+	obsolete, ok := result["Obsolete"].(bool)
+	if !ok {
 		return fmt.Errorf("Obsolete field not found or is not a boolean")
 	}
+
+	if obsolete {
+		return fmt.Errorf("Obsolete is true")
+	}
+
+	return nil
 }
 
-func GetSubscribeResult(client *core.Client) map[string]interface{} {
-	// Create adapter connector
+func GetSubscribeResult(client *core.Client) (map[string]interface{}, error) {
+	done := make(chan bool)
 	acOpts := subscriber_sdk.NewOptions()
 	acOpts.Domain = "default"
 	acOpts.Verbose = true
 	s := subscriber_sdk.NewSubscriberWithClient("", client, acOpts)
-	// Subscribe to specific data product
 	var result map[string]interface{}
 	sub, err := s.Subscribe("products", func(msg *nats.Msg) {
 		var pe gravity_sdk_types_product_event.ProductEvent
 		err := proto.Unmarshal(msg.Data, &pe)
 		if err != nil {
-			fmt.Printf("Failed to parsing product event: %v", err)
-			msg.Ack()
+			fmt.Printf("failed to parsing product event: %v", err)
+			if err := msg.Ack(); err != nil {
+				fmt.Printf("failed to acknowledge message: %v", err)
+			}
 			return
 		}
 
 		r, err := pe.GetContent()
 		if err != nil {
-			fmt.Printf("Failed to parsing content: %v", err)
-			msg.Ack()
+			fmt.Printf("failed to parsing content: %v", err)
+			if err := msg.Ack(); err != nil {
+				fmt.Printf("failed to acknowledge message: %v", err)
+			}
+
 			return
 		}
 		result = r.AsMap()
 
-		msg.Ack()
+		if err := msg.Ack(); err != nil {
+			fmt.Printf("failed to acknowledge message: %v", err)
+		}
+		done <- true
 	}, subscriber_sdk.Partition(-1), subscriber_sdk.StartSequence(1))
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to subscribe: %v", err)
 	}
-	time.Sleep(5 * time.Second)
-	sub.Close()
-	return result
+
+	select {
+	case <-done:
+		if err := sub.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close subscription: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		if err := sub.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close subscription: %v", err)
+		}
+		return nil, fmt.Errorf("subscribe timeout")
+	}
+
+	return result, nil
 }
 
 func CheckSubResult() error {
 	client := core.NewClient()
 	options := core.NewOptions()
-	client.Connect("127.0.0.1:32803", options)
-	obsolete := GetSubscribeResult(client)["Obsolete"]
-
-	if obsolete != 0 {
-		return fmt.Errorf("Obsolete get by sub sdk is true")
-	} else {
-		fmt.Printf("obsolete: %t\n", obsolete)
-		return nil
+	if err := client.Connect(fmt.Sprintf("%s:%d", config.Nats.Host, config.Nats.Port), options); err != nil {
+		return fmt.Errorf("failed to connect to service host port: %v", err)
 	}
+	result, err := GetSubscribeResult(client)
+
+	if err != nil {
+		return fmt.Errorf("Failed to get result from subscribe sdk: %v", err)
+	}
+
+	if result["Obsolete"] != 0 {
+		return fmt.Errorf("Obsolete get by sub sdk is true")
+	}
+
+	return nil
 }
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
@@ -669,7 +693,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Given(`^Load the initial configuration file$`, LoadConfig)
 	ctx.Given(`^Start the "([^"]*)" service \(timeout "(\d+)"\)$`, DockerComposeServiceStart)
 	ctx.Given(`^Initialize the "([^"]*)" table Products$`, DBServerInit)
-	ctx.Given(`^Create Data Product Products$`, CreateDataProduct)
+	ctx.Given(`^Create data product Products$`, CreateDataProduct)
 	ctx.Given(`^Set up atomic flow document$`, InitAtomicService)
 
 	ctx.Given(`^"([^"]*)" table "([^"]*)" inserted a record which has false boolean value$`, InsertARecord)

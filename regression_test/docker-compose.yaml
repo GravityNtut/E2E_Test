@@ -99,7 +99,7 @@ services:
       - GRAVITY_ADAPTER_MSSQL_STORE_PATH=/statestore
 
   gravity-dispatcher:
-    image: "ghcr.io/brobridgeorg/gravity-dispatcher:v0.0.8-20241016"
+    image: "ghcr.io/brobridgeorg/gravity-dispatcher:v0.0.10-20241028"
     # restart: always
     container_name: "gravity-dispatcher"
     environment:
@@ -125,7 +125,7 @@ services:
       - "nats-jetstream"
       - "target-mysql"
       - "gravity-dispatcher"
-    user: "1000:1001"
+    user: "1000:1000"
     ports:
       - 1880:1880
     volumes:
